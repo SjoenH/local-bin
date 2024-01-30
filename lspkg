@@ -1,0 +1,3 @@
+#!/bin/bash
+
+fd 'package.json' | xargs -n1 jq '.name' | grep -v 'null'
