@@ -5,4 +5,4 @@ fd 'package.json' | while read -r file; do
     # Use jq to extract and format the desired fields
     jq -r 'select(.name != null) | "\(.name) | \(.version) | \(.description // "") | \(input_filename)"' "$file" ||
         echo "Error processing $file" >&2  # Print error message to stderr
-done | awk '!seen[$0]++' | sort -u | column -t -s '|'  # Remove duplicate lines and format output
+done | sort -u | column -t -s '|'
