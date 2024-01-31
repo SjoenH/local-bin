@@ -1,3 +1,11 @@
 #!/bin/bash
 
-fd 'package.json' | xargs -n1 jq '.name' | grep -v 'null'
+fd 'package.json' | while read -r file; do
+    package_name=$(jq -r ".name" "$file")
+    package_version=$(jq -r ".version" "$file")
+    package_description=$(jq -r ".description // \"\"" "$file")
+    if [ "$package_name" != "null" ]; then
+        echo -e "$package_name |\033[0;37m $package_version | $package_description | $file \033[0m"
+    fi
+done | sort -u | column -t -s '|'
+
