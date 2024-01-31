@@ -1,11 +1,8 @@
 #!/bin/bash
 
+# Find all package.json files and pass them to jq for processing
 fd 'package.json' | while read -r file; do
-    package_name=$(jq -r ".name" "$file")
-    package_version=$(jq -r ".version" "$file")
-    package_description=$(jq -r ".description // \"\"" "$file")
-    if [ "$package_name" != "null" ]; then
-        echo -e "$package_name |\033[0;37m $package_version | $package_description | $file \033[0m"
-    fi
-done | sort -u | column -t -s '|'
-
+    # Use jq to extract and format the desired fields
+    jq -r 'select(.name != null) | "\(.name) | \(.version) | \(.description // "") | \(input_filename)"' "$file" ||
+        echo "Error processing $file" >&2  # Print error message to stderr
+done | awk '!seen[$0]++' | sort -u | column -t -s '|'  # Remove duplicate lines and format output
