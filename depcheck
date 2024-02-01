@@ -11,6 +11,6 @@ for package in $(fd 'package.json'); do
         [ "$dep_type" = "devDependencies" ] && printf " (devDep)\n" || printf "\n"
     fi
   done
-done
+done | column -t
 
 exit 0
