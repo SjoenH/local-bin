@@ -3,6 +3,6 @@
 # Find all package.json files and pass them to jq for processing
 fd 'package.json' | while read -r file; do
     # Use jq to extract and format the desired fields
-    jq -r 'select(.name != null) | "\(.name) | \(.version) | \(.description // "") | \(input_filename)"' "$file" ||
+    jq -r '"\(.name // "-") | \(.version // "-") | \(.description // "-") | \(input_filename)"' "$file" ||
         echo "Error processing $file" >&2  # Print error message to stderr
 done | sort -u | column -t -s '|'
