@@ -1,57 +1,100 @@
 #!/bin/bash
 
-#Check if the fd command is installed
-if ! command -v fd &> /dev/null; then
-  echo "The fd command is required to run this script. Please install it and try again." >&2
-  exit 1
-fi
+# Check if the fd and jq commands are installed
+for cmd in fd jq; do
+  if ! command -v $cmd &> /dev/null; then
+    echo "The $cmd command is required to run this script. Please install it and try again." >&2
+    exit 1
+  fi
+done
 
-#Check if the jq command is installed
-if ! command -v jq &> /dev/null; then
-  echo "The jq command is required to run this script. Please install it and try again." >&2
-  exit 1
-fi
+INCLUDE_HEADER="true"
+SHOW_USED_BY="false"
+SEARCH_DIRECTORY="."
+OUTPUT_FORMAT="default"
+DISPLAY_HELP="false"
+SHOW_IMMEDIATELY="false"
 
-FORMAT="default"
-HELP="false"
+# Parse command line arguments
+while (( "$#" )); do
+  case "$1" in
+    --no-header|-nh) INCLUDE_HEADER="false"; shift;;
+    --show-used-by|-sub) SHOW_USED_BY="true"; shift;;
+    --directory|-d) SEARCH_DIRECTORY="$2"; shift 2;;
+    --format|-f) OUTPUT_FORMAT="$2"; shift 2;;
+    --help|-h) DISPLAY_HELP="true"; shift;;
+    --immediate|-i) SHOW_IMMEDIATELY="true"; shift;;
+    *) echo "Error: Invalid argument"; exit 1;;
+  esac
+done
 
-if [ "$1" = "--format" ] || [ "$1" = "-f" ]; then
-  FORMAT=$2
-elif [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-  HELP="true"
-fi
+PARSE_PACKAGE_JSON() {
+  PACKAGE_NAME=$(jq -r '.name' "$1" || true)
+  if [ -n "$PACKAGE_NAME" ] && [ "$PACKAGE_NAME" != "null" ]; then
+    DEPENDENCIES=""
+    if [ "$SHOW_USED_BY" = "true" ]; then
+      if ! command -v depcheck &> /dev/null; then
+        echo "The depcheck command is required to run this script with the --show-used-by option. Please install it and try again." >&2
+      exit 1
+      fi
+      DEPENDENCIES=$(depcheck "$PACKAGE_NAME" | paste -sd ',' -)
+    fi
+    printf "%s | %s | %s | %s | %s\n" "$PACKAGE_NAME" "$(jq -r '.version // "-"' "$1")" "$(jq -r '.description // "-"' "$1")" "$1" "$DEPENDENCIES"
+  fi
+}
+PARSE_ALL_PACKAGE_JSON_FILES_RECURSIVELY() {
+  fd 'package.json' "$SEARCH_DIRECTORY" | while read -r file; do
+   PARSE_PACKAGE_JSON "$file"
+  done
+}
 
 LIST_PACKAGES() {
-  fd 'package.json' | while read -r file; do
-    jq -r '"\(.name // "-") | \(.version // "-") | \(.description // "-") | \(input_filename)"' "$file" ||
-      echo "Error processing $file" >&2
-  done | sort -u | column -t -s '|'
+  (
+    if [ "$INCLUDE_HEADER" = "true" ]; then
+      if [ "$SHOW_USED_BY" = "true" ]; then
+        printf "Name | Version | Description | Path | Is Used By\n"
+      else
+        printf "Name | Version | Description | Path\n"
+      fi
+    fi
+    PARSE_ALL_PACKAGE_JSON_FILES_RECURSIVELY | sort -u
+  ) | column -t -s '|'
 }
 
 LIST_PACKAGES_MD() {
-  printf "| Name | Version | Description | Path |\n"
-  printf "|------|---------|-------------|------|\n"
-  fd 'package.json' | while read -r file; do
-    jq -r '"| \(.name // "-") | \(.version // "-") | \(.description // "-") | \(input_filename) |"' "$file" ||
-      echo "Error processing $file" >&2
-  done | sort -u
+  if [ "$SHOW_USED_BY" = "true" ]; then
+      if ! command -v depcheck &> /dev/null; then
+        echo "The depcheck command is required to run this script with the --show-used-by option. Please install it and try again." >&2
+      exit 1
+      fi
+    printf "| Name | Version | Description | Path | Is Used By |\n"
+    printf "|------|---------|-------------|------|--------------|\n"
+    PARSE_ALL_PACKAGE_JSON_FILES_RECURSIVELY | awk -F '|' '{printf "|%s|%s|%s|%s|%s|\n", $1, $2, $3, $4, $5}' | sort -u
+  else
+    printf "| Name | Version | Description | Path |\n"
+    printf "|------|---------|-------------|------|\n"
+    PARSE_ALL_PACKAGE_JSON_FILES_RECURSIVELY | awk -F '|' '{printf "|%s|%s|%s|%s|\n", $1, $2, $3, $4}' | sort -u
+  fi
 }
 
 SHOW_HELP() {
-  echo "Usage: $0 [--format|-f markdown] [--help|-h]"
+  echo "Usage: $0 [--format|-f markdown] [--immediate|-i] [--help|-h]"
   echo ""
-  echo "This script lists all the npm packages in the current directory and its subdirectories."
-  echo "By default, it displays the list in a tabular format. Use the --format or -f option to display the list in markdown format."
+  echo "Lists all the npm packages in the current directory and its subdirectories."
   echo ""
   echo "Options:"
   echo "  --format, -f markdown  Display the list of packages in markdown format."
+  echo "  --immediate, -i        Display the results immediately, without any delay caused by piping."
   echo "  --help, -h             Show this help message."
+  echo "  --show-used-by, -sub   Show the packages that use each package. Note, this option requires the depcheck package and may take a while to run."
 }
 
-if [ "$HELP" = "true" ]; then
+if [ "$DISPLAY_HELP" = "true" ]; then
   SHOW_HELP
-elif [ "$FORMAT" = "markdown" ]; then
+elif [ "$OUTPUT_FORMAT" = "markdown" ]; then
   LIST_PACKAGES_MD
+elif [ "$SHOW_IMMEDIATELY" = "true" ]; then
+  PARSE_ALL_PACKAGE_JSON_FILES_RECURSIVELY
 else
   LIST_PACKAGES
 fi
