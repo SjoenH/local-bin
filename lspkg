@@ -1,8 +1,57 @@
 #!/bin/bash
 
-# Find all package.json files and pass them to jq for processing
-fd 'package.json' | while read -r file; do
-    # Use jq to extract and format the desired fields
+#Check if the fd command is installed
+if ! command -v fd &> /dev/null; then
+  echo "The fd command is required to run this script. Please install it and try again." >&2
+  exit 1
+fi
+
+#Check if the jq command is installed
+if ! command -v jq &> /dev/null; then
+  echo "The jq command is required to run this script. Please install it and try again." >&2
+  exit 1
+fi
+
+FORMAT="default"
+HELP="false"
+
+if [ "$1" = "--format" ] || [ "$1" = "-f" ]; then
+  FORMAT=$2
+elif [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  HELP="true"
+fi
+
+LIST_PACKAGES() {
+  fd 'package.json' | while read -r file; do
     jq -r '"\(.name // "-") | \(.version // "-") | \(.description // "-") | \(input_filename)"' "$file" ||
-        echo "Error processing $file" >&2  # Print error message to stderr
-done | sort -u | column -t -s '|'
+      echo "Error processing $file" >&2
+  done | sort -u | column -t -s '|'
+}
+
+LIST_PACKAGES_MD() {
+  printf "| Name | Version | Description | Path |\n"
+  printf "|------|---------|-------------|------|\n"
+  fd 'package.json' | while read -r file; do
+    jq -r '"| \(.name // "-") | \(.version // "-") | \(.description // "-") | \(input_filename) |"' "$file" ||
+      echo "Error processing $file" >&2
+  done | sort -u
+}
+
+SHOW_HELP() {
+  echo "Usage: $0 [--format|-f markdown] [--help|-h]"
+  echo ""
+  echo "This script lists all the npm packages in the current directory and its subdirectories."
+  echo "By default, it displays the list in a tabular format. Use the --format or -f option to display the list in markdown format."
+  echo ""
+  echo "Options:"
+  echo "  --format, -f markdown  Display the list of packages in markdown format."
+  echo "  --help, -h             Show this help message."
+}
+
+if [ "$HELP" = "true" ]; then
+  SHOW_HELP
+elif [ "$FORMAT" = "markdown" ]; then
+  LIST_PACKAGES_MD
+else
+  LIST_PACKAGES
+fi
