@@ -1,0 +1,418 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Configuration
+MODEL="llama3.1"
+CODE_REVIEW_MODEL="llama3.1"
+#CODE_REVIEW_MODEL="codellama"
+SCRIPT_NAME=$(basename "$0")
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Functions
+error() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    exit 1
+}
+
+warn() {
+    echo -e "${YELLOW}Warning: $1${NC}" >&2
+}
+
+info() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+capitalize() {
+    echo "$1" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}'
+}
+clean_diff() {
+    local diff="$1"
+    echo "$diff" | sed 's/^+/[ADDED] /; s/^-/[REMOVED] /' | sed '/^+++/d; /^---/d; /^@@/d' | grep -v '^$'
+}
+analyze_content() {
+    local content="$1"
+    local analysis=""
+
+    if [[ -z "$content" ]]; then
+        analysis="The content is completely missing. Did you forget to write something?"
+    elif [[ ${#content} -lt 50 ]]; then
+        analysis="The content is too short. Are you even trying?"
+    fi
+
+    echo "$analysis"
+}
+
+generate_prompt() {
+    local type="$1"
+    local item_text="$2"
+    local project_type="$3"
+    local language_framework="$4"
+    local areas_of_concern="$5"
+
+    case "$type" in
+  "email_request")
+             cat << EOF
+Transform this GitHub issue into a brief, to-the-point email requesting help to fix the problem. Keep it short and simple.
+
+**GitHub Issue:**
+$item_text
+
+**Email Guidelines:**
+1. Start with a brief greeting.
+2. State the problem clearly and concisely.
+3. Mention why it needs fixing (if critical).
+4. Request help directly.
+5. End with a quick thanks.
+
+**Format:**
+One short paragraph, no more than 5 sentences. Skip formalities.
+EOF
+             ;;
+       "code_review")
+           cat << EOF
+Please review the following Git diff, focusing on code quality, potential issues, and adherence to best practices. Your review should be based on the actual code changes shown in the diff.
+
+**Context:**
+- **Project type:** $project_type
+- **Programming language/framework:** $language_framework
+- **Specific areas of concern:** $areas_of_concern
+
+**Git Diff:**
+The diff below uses standard Git diff format:
+- Lines starting with '-' (minus) indicate removed code.
+- Lines starting with '+' (plus) indicate added code.
+- Lines without '-' or '+' are shown for context and have not been changed.
+- Lines starting with '@@' indicate the location of the change in the file.
+
+\`\`\`diff
+$item_text
+\`\`\`
+
+**Review Objectives:**
+1. Identify any critical errors, bugs, or security vulnerabilities in the changes.
+2. Point out any code that could be simplified, optimized, or made more efficient.
+3. Highlight any naming convention issues or violations of best practices.
+4. Suggest specific improvements, providing code examples where appropriate.
+5. Mention any areas where additional testing or validation might be required.
+
+**Note:**
+- Focus on the actual code changes shown in the diff.
+- Consider the context of the changes when reviewing.
+- Do not provide general explanations about how to conduct a code review.
+- Ensure your suggestions are directly relevant to the code in the diff.
+
+**Format:**
+Please provide your review in a concise, bullet-point format, focusing on the most critical issues first. Use code examples from the diff to illustrate your points.
+EOF
+            ;;
+        "naming_review")
+            cat << EOF
+Please review the following Git diff, focusing ONLY on naming conventions and best practices. Identify any issues with variable, function, or class names and suggest improvements.
+
+**Context:**
+- **Project type:** $project_type
+- **Programming language/framework:** $language_framework
+
+**Git Diff:**
+\`\`\`diff
+$item_text
+\`\`\`
+
+**Review Objectives:**
+- Identify any violations of naming conventions or best practices.
+- Suggest improvements for variable, function, and class names.
+- Provide examples of better naming where applicable.
+
+**Naming Cheat Sheet with Examples:**
+1. Use English language for naming.
+   Example: Use 'firstName' instead of 'primerNombre'
+
+2. Follow a consistent naming convention (camelCase, PascalCase, snake_case).
+   Example: 'getUserInfo()', 'UserProfile', 'user_authentication'
+
+3. Names should be short, intuitive, and descriptive (S-I-D principle).
+   Example: Use 'postCount' instead of 'numberOfPostsInDatabase'
+
+4. Avoid contractions in names.
+   Example: Use 'onItemClick' instead of 'onItmClk'
+
+5. Avoid context duplication in names.
+   Example: In a MenuItem class, use 'handleClick()' instead of 'handleMenuItemClick()'
+
+6. Names should reflect the expected result.
+   Example: Use 'isDisabled' instead of 'isEnabled' when the condition is 'itemCount <= 3'
+
+7. For functions, follow the A/HC/LC pattern: prefix? + action (A) + high context (HC) + low context? (LC)
+   Examples: 'getUser()', 'shouldUpdateComponent()', 'handleClickOutside()'
+
+8. Use appropriate action verbs:
+   - get: 'getUserInfo()'
+   - set: 'setUserName()'
+   - reset: 'resetGameState()'
+   - remove: 'removeFilter()'
+   - delete: 'deletePost()'
+   - compose: 'composePageUrl()'
+   - handle: 'handleSubmit()'
+
+9. Include context in names when necessary.
+   Example: 'getUserMessages()' instead of just 'getMessages()'
+
+10. Use prefixes like 'is', 'has', 'should', 'min/max', 'prev/next' when appropriate.
+    Examples: 'isActive', 'hasPermission', 'shouldUpdate', 'minPrice', 'prevState', 'nextPage'
+
+11. Use singular for single values and plurals for multiple values.
+    Example: 'const friend = 'Bob'' vs 'const friends = ['Bob', 'Alice']'
+
+**Format:**
+Please provide your review in a concise, example-based format, focusing only on naming issues and suggested improvements.
+EOF
+                ;;
+        "user_story")
+            echo "Generate a user story based on the following item:
+$item_text
+Format it as: 'As a [type of user], I want [some goal], So that [some reason/benefit].'"
+            ;;
+        "summary")
+            echo "Summarize the following item in one or two sentences:
+$item_text"
+            ;;
+        "pirate")
+            echo "Translate the following item description into pirate speech:
+$item_text"
+            ;;
+        "eli5")
+            echo "Explain the following item like I'm 5 years old:
+$item_text"
+            ;;
+        "haiku")
+            echo "Create a haiku that captures the essence of the following item:
+$item_text
+Ensure it follows the 5-7-5 syllable structure."
+            ;;
+        "roast")
+            local analysis
+            analysis=$(analyze_content "$item_text")
+            echo "Roast the user who wrote the following item in a humorous and light-hearted manner:
+$item_text
+
+Analysis: $analysis"
+            ;;
+        "roast_extra_toasted")
+            local analysis
+            analysis=$(analyze_content "$item_text")
+            echo "Roast the user who wrote the following item in an extremely harsh and not for the lighthearted manner:
+$item_text
+
+Analysis: $analysis"
+            ;;
+        *)
+            error "Invalid output type specified."
+            ;;
+    esac
+}
+
+generate_output() {
+    local type="$1"
+    local item_text="$2"
+    local project_type="$3"
+    local language_framework="$4"
+    local areas_of_concern="$5"
+    local prompt
+
+    prompt=$(generate_prompt "$type" "$item_text" "$project_type" "$language_framework" "$areas_of_concern")
+
+    if [[ "$show_prompt" == true ]]; then
+        info "Generated prompt for debugging:"
+        echo -e "$prompt"
+    fi
+
+    if [[ "$type" == "code_review" ]]; then
+        # Use a temporary file to store the output
+        local temp_output
+        temp_output=$(mktemp)
+        echo -e "$prompt" | ollama run "$CODE_REVIEW_MODEL" > "$temp_output"
+
+        # Read the output without additional formatting
+        local formatted_output
+        formatted_output=$(cat "$temp_output")
+
+        # Clean up the temporary file
+        rm "$temp_output"
+
+        echo -e "$formatted_output"
+    else
+        echo -e "$prompt" | ollama run "$MODEL"
+    fi
+}
+
+fetch_item() {
+    local item_type="$1"
+    local item_number="$2"
+
+    if [[ "$item_type" == "issue" ]]; then
+        gh issue view "$item_number"
+    elif [[ "$item_type" == "pr" ]]; then
+        gh pr view "$item_number"
+    else
+        error "Invalid item type"
+    fi
+}
+
+fetch_pr_diff() {
+    local pr_number="$1"
+    gh pr diff "$pr_number" | sed -n '/^+/s/^+//p' | sed '/^+++/d'
+}
+
+prompt_yes_no() {
+    local prompt="$1"
+    while true; do
+        read -rp "$prompt (yes/no): " yn
+        case $yn in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+}
+
+show_help() {
+    cat << EOF
+Usage: $SCRIPT_NAME [OPTION] [--issue <number> | --pr <number>] [--show-prompt]
+
+Generate different types of outputs for GitHub issues or pull requests in the current repository.
+
+Options:
+  user_story     Generate a user story based on the issue or PR.
+  summary        Summarize the issue or PR in one or two sentences.
+  pirate         Translate the issue or PR description into pirate speech.
+  eli5           Explain the issue or PR like I'm 5 years old.
+  haiku          Create a haiku that captures the essence of the issue or PR.
+  roast          Roast the user who wrote the issue or PR in a humorous and light-hearted manner.
+  roast_extra_toasted Roast the user who wrote the issue or PR in an extremely harsh and not for the lighthearted manner.
+  code_review    Review the code changes in a PR in a friendly, professional manner.
+  naming_review  Review only the naming conventions in the code changes.
+  email_request  Transform the issue into a brief, to-the-point email requesting help.
+  help           Display this help message.
+
+Item Selection:
+  --issue <number>  Process only the issue with the specified number.
+  --pr <number>     Process only the pull request with the specified number.
+
+Debugging:
+  --show-prompt     Show the generated prompt for debugging purposes.
+
+Examples:
+  $SCRIPT_NAME user_story --issue 123
+  $SCRIPT_NAME summary --pr 456
+  $SCRIPT_NAME haiku --issue 789
+  $SCRIPT_NAME roast --pr 101
+  $SCRIPT_NAME roast_extra_toasted --issue 202
+  $SCRIPT_NAME code_review --pr 303
+  $SCRIPT_NAME naming_review --pr 303
+  $SCRIPT_NAME user_story --issue 123 --show-prompt
+EOF
+}
+
+main() {
+    local output_type=""
+    local issue_number=""
+    local pr_number=""
+    local show_prompt=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            user_story|summary|pirate|eli5|haiku|roast|roast_extra_toasted|code_review|naming_review|email_request)
+                output_type="$1"
+                shift
+                ;;
+            --issue)
+                issue_number="$2"
+                shift 2
+                ;;
+            --pr)
+                pr_number="$2"
+                shift 2
+                ;;
+            --show-prompt)
+                show_prompt=true
+                shift
+                ;;
+            help|--help|-h)
+                show_help
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                ;;
+        esac
+    done
+
+    if [[ -z "$output_type" ]]; then
+        show_help
+        exit 0
+    fi
+
+    local item_type
+    local item_number
+    local item
+    local project_type=""
+    local language_framework=""
+    local areas_of_concern=""
+
+      if [[ -n "$issue_number" ]]; then
+          item_type="issue"
+          item_number=$issue_number
+          item=$(fetch_item "$item_type" "$item_number")
+      elif [[ -n "$pr_number" ]]; then
+          item_type="pr"
+          item_number=$pr_number
+if [[ "$output_type" == "code_review" || "$output_type" == "naming_review" ]]; then
+    read -p "Enter project type (e.g., web application, API): " project_type
+    read -p "Enter programming language/framework: " language_framework
+    if [[ "$output_type" == "code_review" ]]; then
+        read -p "Enter specific areas of concern (comma-separated): " areas_of_concern
+    fi
+    item=$(gh pr diff "$item_number")
+    if [[ -z "$item" ]]; then
+        warn "No changes found in the PR diff."
+        exit 0
+    fi
+else
+    item=$(fetch_item "$item_type" "$item_number")
+fi
+      else
+          error "Please specify an issue number using --issue <number> or a PR number using --pr <number>"
+      fi
+
+    if [[ -z "$item" ]]; then
+        error "No $item_type found."
+    fi
+
+    info "Processing $item_type #$item_number"
+    local capitalized_type
+    capitalized_type=$(capitalize "$output_type")
+    local output
+    output=$(generate_output "$output_type" "$item" "$project_type" "$language_framework" "$areas_of_concern")
+
+    echo "$item_type #$item_number"
+    echo "$capitalized_type:"
+    echo "$output"
+    echo "------------------------------------"
+
+    if prompt_yes_no "Do you want to add this output as a comment to the $item_type #$item_number?"; then
+        gh "$item_type" comment "$item_number" --body "$capitalized_type:
+
+${output:-None}"
+        info "Comment added to $item_type #$item_number"
+    else
+        info "Comment not added."
+    fi
+}
+
+main "$@"
