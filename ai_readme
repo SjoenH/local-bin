@@ -32,19 +32,42 @@ Provide a concise explanation in 2-3 sentences."
     done
 }
 
+generate_usage_instructions() {
+    USAGE_INSTRUCTIONS=""
+    for file in $(find . -type f -name '*.sh' -not -path '*/\.*' | sort); do
+        local file_content=$(cat "$file" | sed 's/"/\\"/g')
+        local prompt="Generate usage instructions for the following bash script content in a 'man page' style:
+
+Filename: $file
+
+Content:
+$file_content
+
+Provide a detailed usage instruction."
+
+        local instructions=$(echo "$prompt" | ollama run "llama3.1")
+        USAGE_INSTRUCTIONS+="### $file\n$instructions\n\n"
+    done
+}
+
 generate_readme() {
     local model="llama3.1"
     local project_name=$(basename "$PWD")
-    local prompt="Generate a README for a project named '$project_name' based on the following file descriptions:
+    local prompt="Generate a README for a project named '$project_name' based on the following file descriptions and usage instructions:
 
+File Descriptions:
 $FILE_DESCRIPTIONS
+
+Usage Instructions:
+$USAGE_INSTRUCTIONS
 
 The README should include:
 1. A brief introduction to the project
 2. A table of contents
 3. Explanations for each file, using the provided descriptions
-4. Any apparent installation or usage instructions based on the files present
-5. A conclusion summarizing the project's purpose
+4. Usage instructions for each script file, using the provided instructions
+5. Any apparent installation or usage instructions based on the files present
+6. A conclusion summarizing the project's purpose
 
 Format the README in Markdown."
 
@@ -73,6 +96,7 @@ prompt_user() {
 main() {
     check_dependencies
     generate_file_descriptions
+    generate_usage_instructions
     generate_readme
     prompt_user
 }
