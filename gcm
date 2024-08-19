@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Git Message Generator - Using ollama to generate commit or PR messages
+
+usage() {
+    echo "Usage: $0 [-p|--pr]"
+    echo "  -p, --pr    Generate a pull request message instead of a commit message"
+    exit 1
+}
+
+get_main_branch() {
+    if git rev-parse --verify main >/dev/null 2>&1; then
+        echo "main"
+    elif git rev-parse --verify master >/dev/null 2>&1; then
+        echo "master"
+    else
+        echo "Unable to determine main branch" >&2
+        exit 1
+    fi
+}
+
+generate_message() {
+    local model=$1
+    local message_type=$2
+
+    if [ "$message_type" = "commit" ]; then
+        # Get the staged diff, excluding package-lock.json
+        DIFF=$(git diff --staged --name-only | grep -v "package-lock.json" | xargs git diff --staged)
+    else
+        # Get the diff between current branch and main branch
+        MAIN_BRANCH=$(get_main_branch)
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        DIFF=$(git diff "$MAIN_BRANCH".."$CURRENT_BRANCH")
+    fi
+
+    # Check if there are any changes
+    if [ -z "$DIFF" ]; then
+        echo "No changes found for $message_type message."
+        exit 1
+    fi
+
+    # Generate message using ollama
+    echo "$DIFF" | ollama run "$model"
+}
+
+# Default to commit message
+MODEL="tavernari/git-commit-message"
+MESSAGE_TYPE="commit"
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -p|--pr) MODEL="tavernari/pull-request-message"; MESSAGE_TYPE="pull request"; shift ;;
+        *) usage ;;
+    esac
+done
+
+while true; do
+    GENERATED_MSG=$(generate_message $MODEL "$MESSAGE_TYPE")
+
+    # Display the generated message
+    echo "Generated $MESSAGE_TYPE message:"
+    echo "$GENERATED_MSG"
+
+    # Prompt user to accept, edit, retry, or cancel
+    echo -n "Do you want to use this $MESSAGE_TYPE message? (y)es / (e)dit / (r)etry / (n)o: "
+    read -n 1 -r
+    echo    # move to a new line
+
+    case $REPLY in
+        y|Y )
+            if [ "$MESSAGE_TYPE" = "commit" ]; then
+                git commit -m "$GENERATED_MSG"
+                echo "Changes committed with the generated message."
+            else
+                echo "$GENERATED_MSG" | pbcopy
+                echo "Pull request message copied to clipboard."
+            fi
+            break
+            ;;
+        e|E )
+            echo "$GENERATED_MSG" > /tmp/generated_msg_edit
+            ${EDITOR:-vi} /tmp/generated_msg_edit
+            if [ "$MESSAGE_TYPE" = "commit" ]; then
+                git commit -F /tmp/generated_msg_edit
+                echo "Changes committed with the edited message."
+            else
+                pbcopy < /tmp/generated_msg_edit
+                echo "Edited pull request message copied to clipboard."
+            fi
+            rm /tmp/generated_msg_edit
+            break
+            ;;
+        r|R )
+            echo "Generating a new $MESSAGE_TYPE message..."
+            continue
+            ;;
+        * )
+            echo "Operation cancelled."
+            break
+            ;;
+    esac
+done
