@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# AI README Generator - Using llama3.1 via ollama to generate README.md with file explanations
+
+usage() {
+    echo "Usage: $0"
+    exit 1
+}
+
+check_dependencies() {
+    if ! command -v ollama &> /dev/null; then
+        echo "ollama could not be found. Please install it first."
+        exit 1
+    fi
+}
+
+generate_file_descriptions() {
+    FILE_DESCRIPTIONS=""
+    for file in $(find . -type f -not -path '*/\.*' | sort); do
+        local file_content=$(cat "$file" | sed 's/"/\\"/g')
+        local prompt="Briefly describe the purpose and functionality of the following file content:
+
+Filename: $file
+
+Content:
+$file_content
+
+Provide a concise explanation in 2-3 sentences."
+
+        local description=$(echo "$prompt" | ollama run "llama3.1")
+        FILE_DESCRIPTIONS+="### $file\n$description\n\n"
+    done
+}
+
+generate_readme() {
+    local model="llama3.1"
+    local project_name=$(basename "$PWD")
+    local prompt="Generate a README for a project named '$project_name' based on the following file descriptions:
+
+$FILE_DESCRIPTIONS
+
+The README should include:
+1. A brief introduction to the project
+2. A table of contents
+3. Explanations for each file, using the provided descriptions
+4. Any apparent installation or usage instructions based on the files present
+5. A conclusion summarizing the project's purpose
+
+Format the README in Markdown."
+
+    README_CONTENT=$(echo "$prompt" | ollama run "$model")
+}
+
+write_readme() {
+    echo "$README_CONTENT" > README.md
+    echo "README.md has been generated."
+}
+
+prompt_user() {
+    echo "Generated README content:"
+    echo "$README_CONTENT"
+    echo -n "Do you want to save the generated README? (y)es / (n)o: "
+    read -n 1 -r
+    echo    # move to a new line
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        write_readme
+    else
+        echo "README.md was not saved."
+    fi
+}
+
+main() {
+    check_dependencies
+    generate_file_descriptions
+    generate_readme
+    prompt_user
+}
+
+main "$@"
