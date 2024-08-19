@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Configuration
+MODEL="llama3.1"  # Using the LLaMA 3.1 model from Ollama
+
+# Fetch existing labels from the current repository
+existing_labels=$(gh label list --json name | jq -r '.[].name')
+
+# Fetch issues from the current repository
+issues=$(gh issue list --json title,body,number)
+
+# Iterate through each issue
+echo "$issues" | jq -c '.[]' | while read -r issue; do
+  # Extract issue details
+  title=$(echo "$issue" | jq -r '.title')
+  body=$(echo "$issue" | jq -r '.body')
+  number=$(echo "$issue" | jq -r '.number')
+
+  echo "Processing Issue #$number: $title"
+
+  # Prepare a prompt that includes the list of existing labels
+  prompt="Here is a list of available labels: $existing_labels. Suggest 1-3 of these labels for the following issue:\nTitle: $title\nDescription: $body"
+
+  # Get label suggestions from Ollama using llama3.1
+  labels=$(echo -e "$prompt" | ollama run "$MODEL")
+
+  # Extract and clean label suggestions using `sed`
+  structured_labels=$(echo "$labels" | sed -n 's/.*\*\*\(.*\)\*\*.*/\1/p' | paste -sd ',' -)
+
+  # Display the structured label output
+  echo "Issue #$number: $title"
+  echo "Suggested Labels: ${structured_labels:-None}"
+  echo "------------------------------------"
+
+done
