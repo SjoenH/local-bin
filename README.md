@@ -15,7 +15,29 @@ Before installing these scripts, ensure you have the following dependencies inst
 - `jq` - for JSON parsing (lspkg, depcheck)
 - `sqlite3` - for the epcheck test suite database functionality
 
-### Installation Steps
+### Quick Setup (Recommended)
+
+For the fastest setup experience, use the automated setup script:
+
+```bash
+# Clone the repository
+git clone https://github.com/SjoenH/local-bin.git ~/bin
+cd ~/bin
+
+# Run the setup script (automates everything)
+./setup.sh
+```
+
+The setup script will:
+- Check for required dependencies
+- Build the Rust binaries (if Rust is available)
+- Make all scripts executable
+- Verify your PATH configuration
+- Provide helpful feedback and next steps
+
+### Manual Installation Steps
+
+If you prefer to install manually or the setup script doesn't work:
 
 1.  **Clone the repository** to a local directory. We recommend using `~/bin` or `~/.local/bin`:
 
@@ -101,9 +123,14 @@ If you prefer to keep the repository elsewhere, you can create symbolic links:
 ```bash
 # Clone to any location
 git clone https://github.com/SjoenH/local-bin.git ~/projects/local-bin
+cd ~/projects/local-bin
 
+# Use the setup script (recommended)
+./setup.sh
+
+# Or do it manually:
 # Build the Rust binaries
-cd ~/projects/local-bin/epcheck-rust
+cd epcheck-rust
 cargo build --release
 cd ..
 
