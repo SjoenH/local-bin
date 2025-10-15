@@ -123,6 +123,32 @@ Usage:
 ./depcheck <package_name>
 ```
 
+### epcheck
+------------
+
+A script that checks which OpenAPI endpoints are used in the codebase and where they are referenced. It analyzes your project to show endpoint usage statistics, helping identify unused API endpoints and track endpoint adoption across your codebase.
+
+Features:
+- Fast searching using ripgrep (falls back to grep if not available)
+- Multiple output formats: table, CSV, JSON
+- Interactive endpoint selection with fzf
+- Pattern-based endpoint filtering
+- Quick mode for faster results on large codebases
+- Detailed file reference listings
+
+Usage:
+```bash
+./epcheck [OPTIONS]
+
+# Examples:
+./epcheck                                    # Show all endpoints with full file lists
+./epcheck --unused-only                     # Show only unused endpoints
+./epcheck --pattern "Saker.*Drivere"        # Filter endpoints by regex pattern
+./epcheck --format csv                      # Output in CSV format
+./epcheck --interactive                     # Interactive mode with fzf
+./epcheck --quick --truncate                # Fast mode with compact output
+```
+
 ### gcm
 ----------
 
