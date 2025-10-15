@@ -4,12 +4,7 @@
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Colors for output (inherited from epcheck script)
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -97,7 +92,7 @@ load_expected_results() {
 
             # Read file content and escape for SQL
             local content
-            content=$(cat "$expected_file" | sed "s/'/''/g")
+            content=$(sed "s/'/''/g" < "$expected_file")
 
             # Insert or replace expected result
             sqlite3 "$DATABASE_FILE" "
@@ -225,8 +220,6 @@ run_test() {
     start_time=$(date +%s)
 
     local output_content=""
-    local error_content=""
-    local time_content=""
     local exit_code=0
 
     log "🚀 Executing: $EPCHECK_PATH $args"
@@ -234,21 +227,20 @@ run_test() {
     # Use /usr/bin/time to capture memory usage if available
     if false && command -v /usr/bin/time >/dev/null 2>&1; then
         # Capture both stdout and stderr from time
-        time_output=$(/usr/bin/time -l "$EPCHECK_PATH" $args 2>&1)
+        time_output=$(/usr/bin/time -l "$EPCHECK_PATH" "$args" 2>&1)
         exit_code=$?
 
         # Extract the program's stdout (everything before time statistics)
         output_content=$(echo "$time_output" | sed '/^[[:space:]]*[0-9]\+\.[0-9]/,$d' | grep -v "Using npx")
 
         # Extract the program's stderr (the "Using npx" line)
-        error_content=$(echo "$time_output" | grep "Using npx")
+        # error_content=$(echo "$time_output" | grep "Using npx")  # Not currently used
 
-        # Extract time statistics
-        time_content=$(echo "$time_output" | grep -A 20 "maximum resident set size")
+        # Extract time statistics (not currently used)
+        # time_content=$(echo "$time_output" | grep -A 20 "maximum resident set size")
     else
-        output_content=$("$EPCHECK_PATH" $args 2>&1 | grep -v "Using npx")
+        output_content=$("$EPCHECK_PATH" "$args" 2>&1 | grep -v "Using npx")
         exit_code=$?
-        time_content="Memory monitoring not available"
         memory_bytes=0
     fi
 
@@ -258,10 +250,7 @@ run_test() {
     duration=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "0")
 
     # Parse memory usage from time output (in bytes)
-    local memory_bytes=0
-    if [ -f "$time_file" ] && grep -q "maximum resident set size" "$time_file"; then
-        memory_bytes=$(grep "maximum resident set size" "$time_file" | awk '{print $1}' | tr -d ' ' | head -1)
-    fi
+    # Note: Memory monitoring disabled in current implementation
 
     local memory_mb=0
     if [ "$memory_bytes" -gt 0 ]; then
@@ -292,8 +281,6 @@ run_test() {
     # Check exit code
     if [ "$exit_code" -ne "$expected_exit_code" ]; then
         log "❌ Test $test_name FAILED - Expected exit code $expected_exit_code, got $exit_code"
-        log "Error output:"
-        cat "$error_file" | tee -a "$LOG_FILE"
         ((FAILED_TESTS++))
         return
     fi
@@ -425,7 +412,7 @@ generate_summary() {
     log "❌ Failed: $FAILED_TESTS"
     log "⚠️  Skipped: $SKIPPED_TESTS"
 
-    if [ $TOTAL_TESTS -gt 0 ]; then
+    if [ "$TOTAL_TESTS" -gt 0 ]; then
         local pass_rate
         pass_rate=$((PASSED_TESTS * 100 / TOTAL_TESTS))
         log "📈 Pass rate: ${pass_rate}%"
@@ -494,7 +481,7 @@ main() {
     generate_summary
 
     # Complete test run
-    if [ $FAILED_TESTS -gt 0 ]; then
+    if [ "$FAILED_TESTS" -gt 0 ]; then
         complete_test_run "failed"
         log "❌ Some tests failed. Check the log file for details."
         exit 1
