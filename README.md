@@ -12,6 +12,7 @@ Before installing these scripts, ensure you have the following dependencies inst
 - `ollama` - for AI-powered scripts (ai-story, ai_readme, gcm, labelai)
 - `fd` - for scripts that search files (lspkg, usersecrets)
 - `jq` - for JSON parsing (lspkg, depcheck)
+- `sqlite3` - for the epcheck test suite database functionality
 
 ### Installation Steps
 
@@ -71,9 +72,16 @@ Before installing these scripts, ensure you have the following dependencies inst
     # Test that the scripts are in your PATH
     which ai-story
     which lspkg
+    which epcheck
 
     # Try running a script (this will show the help message)
     ai-story help
+
+    # Test epcheck functionality
+    epcheck --help
+
+    # Test the epcheck test suite (if in the repository)
+    cd testbench/v1.0 && ./run-tests.sh && ./test-browser.sh list
     ```
 
 ### Alternative Installation
@@ -128,7 +136,7 @@ Usage:
 
 A script that checks which OpenAPI endpoints are used in the codebase and where they are referenced. It analyzes your project to show endpoint usage statistics, helping identify unused API endpoints and track endpoint adoption across your codebase.
 
-Features:
+#### Features:
 - Fast searching using ripgrep (falls back to grep if not available)
 - Multiple output formats: table, CSV, JSON
 - Interactive endpoint selection with fzf
@@ -136,7 +144,7 @@ Features:
 - Quick mode for faster results on large codebases
 - Detailed file reference listings
 
-Usage:
+#### Usage:
 ```bash
 ./epcheck [OPTIONS]
 
@@ -148,6 +156,52 @@ Usage:
 ./epcheck --interactive                     # Interactive mode with fzf
 ./epcheck --quick --truncate                # Fast mode with compact output
 ```
+
+### epcheck Test Suite
+---------------------
+
+The epcheck test suite validates the functionality of the epcheck script across different scenarios. The test suite now uses a SQLite database for robust data storage and includes a comprehensive CLI browser tool for analyzing test results.
+
+#### Database Features:
+- **SQLite Storage**: All test results stored in a relational database (`testbench.db`)
+- **Complete History**: Full test execution history with timestamps and performance metrics
+- **Validation Tracking**: Detailed validation results with diff output for failures
+- **Performance Monitoring**: Execution time and memory usage tracking
+
+#### Test Browser CLI Tool:
+A powerful command-line tool for browsing and comparing test runs stored in the database.
+
+**Commands:**
+- `list [limit]` - Show recent test runs with pass/fail counts
+- `show <run_id>` - Display detailed test run information
+- `compare <id1> <id2>` - Side-by-side comparison of test runs
+- `failures <run_id>` - Show validation failures with diff output
+- `stats` - Overall statistics and recent performance
+- `trends [days]` - Performance trends over time
+- `export <run_id> <format>` - Export data as JSON or CSV
+
+#### Usage:
+```bash
+# Run the test suite
+cd testbench/v1.0
+./run-tests.sh
+
+# Browse test results
+./test-browser.sh list                    # Show recent test runs
+./test-browser.sh show 1                  # Show details of test run 1
+./test-browser.sh compare 1 2             # Compare test runs 1 and 2
+./test-browser.sh failures 1              # Show failures in test run 1
+./test-browser.sh stats                   # Show overall statistics
+./test-browser.sh export 1 json           # Export test run 1 as JSON
+```
+
+#### Database Schema:
+The SQLite database includes these tables:
+- `test_runs` - Overall test execution metadata
+- `test_executions` - Individual test results with performance metrics
+- `test_validations` - Output validation results and differences
+- `expected_results` - Static expected test outputs
+- `performance_benchmarks` - Performance tracking data
 
 ### gcm
 ----------
