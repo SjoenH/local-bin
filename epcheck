@@ -5,9 +5,6 @@
 set -e
 
 # Default values
-DEFAULT_API_SPEC="app/api/backend.d.ts"
-DEFAULT_CODE_DIR="app/"
-DEFAULT_EXCLUDE_FILE="backend.d.ts"
 DEFAULT_OUTPUT_FORMAT="table"
 
 # Check for faster tools
@@ -21,9 +18,9 @@ show_usage() {
 Usage: $0 [OPTIONS]
 
 OPTIONS:
-  -s, --spec FILE       Path to OpenAPI spec file (default: $DEFAULT_API_SPEC)
-  -d, --dir DIR         Directory to search for endpoint usage (default: $DEFAULT_CODE_DIR)
-  -e, --exclude FILE    File to exclude from search (default: $DEFAULT_EXCLUDE_FILE)
+  -s, --spec FILE       Path to OpenAPI spec file (required)
+  -d, --dir DIR         Directory to search for endpoint usage (required)
+  -e, --exclude FILE    File to exclude from search (optional)
   -f, --format FORMAT   Output format: table, csv, json (default: $DEFAULT_OUTPUT_FORMAT)
   -p, --pattern REGEX   Filter endpoints by regex pattern
   -u, --unused-only     Show only unused endpoints
@@ -153,10 +150,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
 
 # Set defaults if not provided via command line
-API_SPEC="${API_SPEC:-$PROJECT_ROOT/$DEFAULT_API_SPEC}"
-CODE_DIR="${CODE_DIR:-$PROJECT_ROOT/$DEFAULT_CODE_DIR}"
-EXCLUDE_FILE="${EXCLUDE_FILE:-$DEFAULT_EXCLUDE_FILE}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-$DEFAULT_OUTPUT_FORMAT}"
+
+# Validate required parameters
+if [ -z "$API_SPEC" ]; then
+  echo "Error: API spec file is required. Use -s/--spec to specify the file." >&2
+  show_usage >&2
+  exit 1
+fi
+
+if [ -z "$CODE_DIR" ]; then
+  echo "Error: Search directory is required. Use -d/--dir to specify the directory." >&2
+  show_usage >&2
+  exit 1
+fi
 
 # Validate output format
 case "$OUTPUT_FORMAT" in
@@ -174,16 +181,14 @@ if [ "$INTERACTIVE" = true ] && [ "$HAS_FZF" = false ]; then
   exit 1
 fi
 
-# Validate inputs
+# Validate file and directory existence
 if [ ! -f "$API_SPEC" ]; then
   echo "Error: API spec file not found: $API_SPEC" >&2
-  echo "Use -s/--spec to specify a different file or -h/--help for usage." >&2
   exit 1
 fi
 
 if [ ! -d "$CODE_DIR" ]; then
   echo "Error: Code directory not found: $CODE_DIR" >&2
-  echo "Use -d/--dir to specify a different directory or -h/--help for usage." >&2
   exit 1
 fi
 
@@ -191,22 +196,286 @@ fi
 API_SPEC="$(realpath "$API_SPEC")"
 CODE_DIR="$(realpath "$CODE_DIR")"
 
-# Extract endpoint paths from backend.d.ts
-all_endpoints=$(grep -oP '^\s*"\K/api[^" ]+' "$API_SPEC")
+# Function to extract endpoints using npx tools (most reliable)
+extract_with_npx() {
+  local spec_file="$1"
+  local spec_type="$2"
+  
+  # Try using openapi-typescript via npx to convert to a temp file, then parse that
+  if command -v npx >/dev/null 2>&1; then
+    local temp_ts_file=$(mktemp /tmp/openapi_temp.XXXXXX.d.ts)
+    
+    # Convert OpenAPI spec to TypeScript using npx
+    if npx --yes openapi-typescript "$spec_file" --output "$temp_ts_file" >/dev/null 2>&1; then
+      printf "${DIM}Using npx openapi-typescript to parse OpenAPI spec${NC}\n" >&2
+      
+      # Parse the generated TypeScript file
+      awk '
+        /^  "\/api[^"]*": \{/ {
+          # Extract endpoint path (2 spaces for npx generated files)
+          match($0, /"(\/api[^"]*)"/, endpoint_match)
+          endpoint = endpoint_match[1]
+          methods = ""
+          in_endpoint = 1
+          next
+        }
+        
+        in_endpoint && /^  };$/ {
+          # End of endpoint block (2 spaces)
+          if (endpoint != "" && methods != "") {
+            print endpoint "|" methods
+          }
+          endpoint = ""
+          methods = ""
+          in_endpoint = 0
+          next
+        }
+        
+        in_endpoint && /^    (get|post|put|delete|patch|head|options|trace): \{/ {
+          # Found HTTP method (4 spaces for npx generated files)
+          match($0, /^    (get|post|put|delete|patch|head|options|trace)/, method_match)
+          method = toupper(method_match[1])
+          if (methods == "") {
+            methods = method
+          } else {
+            methods = methods "," method
+          }
+        }
+      ' "$temp_ts_file"
+      
+      # Clean up temp file
+      rm -f "$temp_ts_file"
+      return 0
+    else
+      # Clean up temp file on error
+      rm -f "$temp_ts_file"
+      return 1
+    fi
+  else
+    return 1
+  fi
+}
+
+# Function to extract endpoints using swagger-codegen via npx
+extract_with_swagger_codegen() {
+  local spec_file="$1"
+  
+  if command -v npx >/dev/null 2>&1; then
+    # Try to use swagger-codegen-cli to validate and extract info
+    # This is more complex, so we'll keep it simple for now
+    return 1
+  else
+    return 1
+  fi
+}
+
+# Function to extract endpoints using Node.js (fallback)
+extract_with_nodejs() {
+  local spec_file="$1"
+  
+  if command -v node >/dev/null 2>&1; then
+    node -e "
+const fs = require('fs');
+const path = require('path');
+
+async function parseSpec(filePath) {
+  try {
+    let spec;
+    const ext = path.extname(filePath).toLowerCase();
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    if (ext === '.json') {
+      spec = JSON.parse(content);
+    } else if (ext === '.yaml' || ext === '.yml') {
+      // Simple YAML parsing for basic cases
+      const lines = content.split('\n');
+      spec = { paths: {} };
+      let currentPath = null;
+      let currentMethod = null;
+      let indent = 0;
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const leadingSpaces = line.length - line.trimStart().length;
+        
+        // Detect path
+        if (trimmed.match(/^\"?\/api[^\"]*\"?:/)) {
+          currentPath = trimmed.split(':')[0].replace(/[\"']/g, '');
+          spec.paths[currentPath] = {};
+          indent = leadingSpaces;
+        }
+        // Detect method under current path
+        else if (currentPath && leadingSpaces > indent && trimmed.match(/^(get|post|put|delete|patch|head|options|trace):/)) {
+          currentMethod = trimmed.split(':')[0];
+          spec.paths[currentPath][currentMethod] = {};
+        }
+      }
+    } else {
+      console.error('Unsupported file format for Node.js parsing');
+      process.exit(1);
+    }
+    
+    if (!spec.paths) {
+      console.error('No paths found in OpenAPI spec');
+      process.exit(1);
+    }
+    
+    // Extract endpoints and methods
+    Object.entries(spec.paths).forEach(([path, pathObj]) => {
+      if (path.startsWith('/api')) {
+        const methods = [];
+        ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'].forEach(method => {
+          if (pathObj[method]) {
+            methods.push(method.toUpperCase());
+          }
+        });
+        
+        if (methods.length > 0) {
+          console.log(\`\${path}|\${methods.join(',')}\`);
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error(\`Error parsing spec with Node.js: \${error.message}\`);
+    process.exit(1);
+  }
+}
+
+parseSpec('$spec_file');
+" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
+# Function to detect the type of API spec file
+detect_spec_type() {
+  local spec_file="$1"
+  
+  if [[ "$spec_file" == *.json ]]; then
+    echo "json"
+  elif [[ "$spec_file" == *.yaml ]] || [[ "$spec_file" == *.yml ]]; then
+    echo "yaml"
+  elif [[ "$spec_file" == *.d.ts ]] || [[ "$spec_file" == *.ts ]]; then
+    echo "typescript"
+  else
+    # Try to detect by content
+    if grep -q "^{" "$spec_file" 2>/dev/null; then
+      echo "json"
+    elif grep -q "^openapi:" "$spec_file" 2>/dev/null || grep -q "^swagger:" "$spec_file" 2>/dev/null; then
+      echo "yaml"
+    elif grep -q "export interface paths" "$spec_file" 2>/dev/null; then
+      echo "typescript"
+    else
+      echo "unknown"
+    fi
+  fi
+}
+
+# Function to extract endpoints from TypeScript definition (fallback)
+extract_from_typescript() {
+  local spec_file="$1"
+  
+  # Use the improved AWK approach for TypeScript files
+  # Note: The indentation is 4 spaces for endpoints, 8 spaces for methods
+  awk '
+    /^    "\/api[^"]*": \{/ {
+      # Extract endpoint path (4 spaces indentation)
+      match($0, /"(\/api[^"]*)"/, endpoint_match)
+      endpoint = endpoint_match[1]
+      methods = ""
+      in_endpoint = 1
+      next
+    }
+    
+    in_endpoint && /^    };$/ {
+      # End of endpoint block (4 spaces indentation)
+      if (endpoint != "" && methods != "") {
+        print endpoint "|" methods
+      }
+      endpoint = ""
+      methods = ""
+      in_endpoint = 0
+      next
+    }
+    
+    in_endpoint && /^        (get|post|put|delete|patch|head|options|trace): \{/ {
+      # Found HTTP method (8 spaces indentation)
+      match($0, /^        (get|post|put|delete|patch|head|options|trace)/, method_match)
+      method = toupper(method_match[1])
+      if (methods == "") {
+        methods = method
+      } else {
+        methods = methods "," method
+      }
+    }
+  ' "$spec_file"
+}
+
+# Main function to extract endpoints and methods
+extract_endpoints_and_methods() {
+  local spec_file="$1"
+  local spec_type
+  
+  spec_type=$(detect_spec_type "$spec_file")
+  
+  case "$spec_type" in
+    "json"|"yaml")
+      # Try npx openapi-typescript first (most reliable)
+      if extract_with_npx "$spec_file" "$spec_type"; then
+        return 0
+      fi
+      
+      # Fall back to Node.js parsing
+      if extract_with_nodejs "$spec_file"; then
+        printf "${DIM}Using Node.js to parse OpenAPI spec${NC}\n" >&2
+        return 0
+      fi
+      
+      echo "Error: Unable to parse OpenAPI spec. Please ensure npx or Node.js is available." >&2
+      echo "Install Node.js or try using the original TypeScript definition file." >&2
+      return 1
+      ;;
+    "typescript")
+      printf "${DIM}Parsing TypeScript definition file (consider using original OpenAPI spec for better accuracy)${NC}\n" >&2
+      extract_from_typescript "$spec_file"
+      ;;
+    *)
+      echo "Error: Unable to detect spec file type for: $spec_file" >&2
+      echo "Supported formats: JSON (.json), YAML (.yaml/.yml), TypeScript (.d.ts/.ts)" >&2
+      echo "Tip: For best results, use the original OpenAPI spec file instead of generated TypeScript" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Build endpoint list with methods
+all_endpoints=$(extract_endpoints_and_methods "$API_SPEC")
 
 # Interactive mode with fzf
 if [ "$INTERACTIVE" = true ]; then
   printf "${BOLD}${YELLOW}Interactive Endpoint Selection${NC}\n"
   printf "${DIM}Use fzf to select endpoints to analyze (multi-select with Tab)${NC}\n\n"
   
-  selected_endpoints=$(echo "$all_endpoints" | fzf --multi --prompt="Select endpoints: " --header="Tab to select multiple, Enter to confirm")
+  # Format endpoints for display: "GET,POST /api/endpoint"
+  formatted_endpoints=$(echo "$all_endpoints" | sed 's/|/ /' | sort)
+  selected_endpoints=$(echo "$formatted_endpoints" | fzf --multi --prompt="Select endpoints: " --header="Tab to select multiple, Enter to confirm")
   
   if [ -z "$selected_endpoints" ]; then
     echo "No endpoints selected. Exiting."
     exit 0
   fi
   
-  endpoints="$selected_endpoints"
+  # Convert back to original format
+  endpoints=""
+  while IFS= read -r line; do
+    if [ -n "$line" ]; then
+      method_part=$(echo "$line" | cut -d' ' -f1)
+      path_part=$(echo "$line" | cut -d' ' -f2-)
+      endpoints="${endpoints}${path_part}|${method_part}"$'\n'
+    fi
+  done <<< "$selected_endpoints"
 elif [ -n "$ENDPOINT_PATTERN" ]; then
   # Filter endpoints by pattern if specified
   endpoints=$(echo "$all_endpoints" | grep -E "$ENDPOINT_PATTERN" || true)
@@ -218,25 +487,68 @@ else
   endpoints="$all_endpoints"
 fi
 
+# Function to convert OpenAPI path to regex pattern
+convert_path_to_regex() {
+  local path="$1"
+  
+  # Escape special regex characters except {}
+  local escaped_path=$(echo "$path" | sed 's/[[\.*^$()+=!|]/\\&/g')
+  
+  # Convert {param} to regex pattern that matches actual values
+  # {id} becomes [^/"]+ (one or more non-slash, non-quote characters)
+  local regex_path=$(echo "$escaped_path" | sed 's/{[^}]*}/[^\/\"]+/g')
+  
+  echo "$regex_path"
+}
+
 # Fast search function using ripgrep or grep
 fast_search() {
   local endpoint="$1"
-  local search_dir="$2"
-  local exclude_file="$3"
-  local api_spec_file="$4"
+  local methods="$2"
+  local search_dir="$3"
+  local exclude_file="$4"
+  local api_spec_file="$5"
   
   # Get just the filename from the API spec path for exclusion
   local api_spec_basename=$(basename "$api_spec_file")
   
+  # Convert endpoint path to regex pattern for parameter matching
+  local endpoint_regex=$(convert_path_to_regex "$endpoint")
+  
+  # Search for both quoted endpoint and method patterns like .GET("/api/path")
+  local search_patterns=""
+  
+  # Create regex pattern that matches either quoted endpoint or method calls
+  # Pattern: ("endpoint_regex"|\.METHOD\("endpoint_regex"\))
+  search_patterns="(\"$endpoint_regex\""
+  
+  # Add method-specific patterns for each available method
+  IFS=',' read -ra method_array <<< "$methods"
+  for method in "${method_array[@]}"; do
+    search_patterns="$search_patterns|\\.$method\\(\"$endpoint_regex\""
+  done
+  search_patterns="$search_patterns)"
+  
   if [ "$HAS_RG" = true ]; then
     # Use ripgrep for much faster searching
-    rg --files-with-matches --no-heading --no-line-number \
-       --glob "!$exclude_file" --glob "!$api_spec_basename" \
-       --fixed-strings "\"$endpoint\"" "$search_dir" 2>/dev/null || true
+    if [ -n "$exclude_file" ]; then
+      rg --files-with-matches --no-heading --no-line-number \
+         --glob "!$exclude_file" --glob "!$api_spec_basename" \
+         -e "$search_patterns" "$search_dir" 2>/dev/null || true
+    else
+      rg --files-with-matches --no-heading --no-line-number \
+         --glob "!$api_spec_basename" \
+         -e "$search_patterns" "$search_dir" 2>/dev/null || true
+    fi
   else
-    # Fallback to grep - exclude both files
-    grep -r --exclude="$exclude_file" --exclude="$api_spec_basename" \
-         --files-with-matches --fixed-strings "\"$endpoint\"" "$search_dir" 2>/dev/null || true
+    # Fallback to grep with extended regex
+    if [ -n "$exclude_file" ]; then
+      grep -rE --exclude="$exclude_file" --exclude="$api_spec_basename" \
+           --files-with-matches "$search_patterns" "$search_dir" 2>/dev/null || true
+    else
+      grep -rE --exclude="$api_spec_basename" \
+           --files-with-matches "$search_patterns" "$search_dir" 2>/dev/null || true
+    fi
   fi
 }
 
@@ -330,28 +642,30 @@ format_file_list() {
 
 # Function to output in CSV format
 output_csv() {
-  echo "Endpoint,Status,Count,Files"
+  echo "Endpoint,Methods,Status,Count,Files"
   
-  for endpoint in $endpoints; do
-    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-    
-    if [ -n "$files" ]; then
-      status="USED"
-      count=$(fast_count_files "$files")
-      files_formatted=$(format_file_list "$files" "$count" "csv")
-    else
-      status="UNUSED"
-      count=0
-      files_formatted="-"
+  while IFS='|' read -r endpoint methods; do
+    if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+      files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+      
+      if [ -n "$files" ]; then
+        status="USED"
+        count=$(fast_count_files "$files")
+        files_formatted=$(format_file_list "$files" "$count" "csv")
+      else
+        status="UNUSED"
+        count=0
+        files_formatted="-"
+      fi
+      
+      # Skip if unused-only filter is set and endpoint is used
+      if [ "$UNUSED_ONLY" = true ] && [ "$status" = "USED" ]; then
+        continue
+      fi
+      
+      echo "\"$endpoint\",\"$methods\",\"$status\",$count,\"$files_formatted\""
     fi
-    
-    # Skip if unused-only filter is set and endpoint is used
-    if [ "$UNUSED_ONLY" = true ] && [ "$status" = "USED" ]; then
-      continue
-    fi
-    
-    echo "\"$endpoint\",\"$status\",$count,\"$files_formatted\""
-  done
+  done <<< "$endpoints"
 }
 
 # Function to output in JSON format
@@ -361,7 +675,11 @@ output_json() {
   echo "    \"generated\": \"$(date -Iseconds)\","
   echo "    \"api_spec\": \"$(realpath --relative-to="$PROJECT_ROOT" "$API_SPEC")\","
   echo "    \"search_dir\": \"$(realpath --relative-to="$PROJECT_ROOT" "$CODE_DIR")\","
-  echo "    \"exclude_file\": \"$EXCLUDE_FILE\","
+  if [ -n "$EXCLUDE_FILE" ]; then
+    echo "    \"exclude_file\": \"$EXCLUDE_FILE\","
+  else
+    echo "    \"exclude_file\": null,"
+  fi
   echo "    \"tools\": {"
   echo "      \"ripgrep\": $HAS_RG,"
   echo "      \"fzf\": $HAS_FZF,"
@@ -376,51 +694,54 @@ output_json() {
   echo "  \"endpoints\": ["
   
   local first=true
-  for endpoint in $endpoints; do
-    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-    
-    if [ -n "$files" ]; then
-      status="used"
-      count=$(fast_count_files "$files")
-      files_formatted=$(format_file_list "$files" "$count" "json")
-    else
-      status="unused"
-      count=0
-      files_formatted=""
+  while IFS='|' read -r endpoint methods; do
+    if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+      files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+      
+      if [ -n "$files" ]; then
+        status="used"
+        count=$(fast_count_files "$files")
+        files_formatted=$(format_file_list "$files" "$count" "json")
+      else
+        status="unused"
+        count=0
+        files_formatted=""
+      fi
+      
+      # Skip if unused-only filter is set and endpoint is used
+      if [ "$UNUSED_ONLY" = true ] && [ "$status" = "used" ]; then
+        continue
+      fi
+      
+      if [ "$first" = false ]; then
+        echo ","
+      fi
+      first=false
+      
+      echo "    {"
+      echo "      \"endpoint\": \"$endpoint\","
+      echo "      \"methods\": \"$methods\","
+      echo "      \"status\": \"$status\","
+      if [ "$QUICK_MODE" = true ] && [ "$count" != "0" ]; then
+        echo "      \"count\": \"$count\","
+      else
+        echo "      \"count\": $count,"
+      fi
+      if [ "$count" != "0" ] && [ -n "$files_formatted" ]; then
+        echo "      \"files\": ["
+        IFS=';' read -r -a files_array <<< "$files_formatted"
+        for i in "${!files_array[@]}"; do
+          if [ $i -gt 0 ]; then echo ","; fi
+          echo -n "        \"${files_array[i]}\""
+        done
+        echo ""
+        echo "      ]"
+      else
+        echo "      \"files\": []"
+      fi
+      echo -n "    }"
     fi
-    
-    # Skip if unused-only filter is set and endpoint is used
-    if [ "$UNUSED_ONLY" = true ] && [ "$status" = "used" ]; then
-      continue
-    fi
-    
-    if [ "$first" = false ]; then
-      echo ","
-    fi
-    first=false
-    
-    echo "    {"
-    echo "      \"endpoint\": \"$endpoint\","
-    echo "      \"status\": \"$status\","
-    if [ "$QUICK_MODE" = true ] && [ "$count" != "0" ]; then
-      echo "      \"count\": \"$count\","
-    else
-      echo "      \"count\": $count,"
-    fi
-    if [ "$count" != "0" ] && [ -n "$files_formatted" ]; then
-      echo "      \"files\": ["
-      IFS=';' read -r -a files_array <<< "$files_formatted"
-      for i in "${!files_array[@]}"; do
-        if [ $i -gt 0 ]; then echo ","; fi
-        echo -n "        \"${files_array[i]}\""
-      done
-      echo ""
-      echo "      ]"
-    else
-      echo "      \"files\": []"
-    fi
-    echo -n "    }"
-  done
+  done <<< "$endpoints"
   
   echo ""
   echo "  ]"
@@ -448,7 +769,11 @@ printf "\n${BOLD}${YELLOW}OpenAPI Endpoint Usage Report${NC}\n"
 printf "${DIM}Generated on $(date)${NC}\n"
 printf "${DIM}API Spec: %s${NC}\n" "$(realpath --relative-to="$PROJECT_ROOT" "$API_SPEC")"
 printf "${DIM}Search Dir: %s${NC}\n" "$(realpath --relative-to="$PROJECT_ROOT" "$CODE_DIR")"
-printf "${DIM}Excluding: %s, %s${NC}\n" "$EXCLUDE_FILE" "$(basename "$API_SPEC")"
+if [ -n "$EXCLUDE_FILE" ]; then
+  printf "${DIM}Excluding: %s, %s${NC}\n" "$EXCLUDE_FILE" "$(basename "$API_SPEC")"
+else
+  printf "${DIM}Excluding: %s${NC}\n" "$(basename "$API_SPEC")"
+fi
 if [ "$HAS_RG" = true ]; then
   printf "${DIM}Search: ripgrep (fast)${NC}\n"
 else
@@ -475,32 +800,34 @@ printf "\n"
 
 # Prepare table data
 table_data=""
-table_data+="Endpoint|Status|Count|Files\n"
+table_data+="Endpoint|Methods|Status|Count|Files\n"
 
 # Collect data and build table rows
-for endpoint in $endpoints; do
-  # Find all files where the endpoint is used (excluding specified file and API spec)
-  files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-  
-  if [ -n "$files" ]; then
-    status="${GREEN}✓ USED${NC}"
-    # Count files
-    count=$(fast_count_files "$files")
-    files_formatted=$(format_file_list "$files" "$count" "table")
-  else
-    status="${RED}✗ UNUSED${NC}"
-    count=0
-    files_formatted="-"
+while IFS='|' read -r endpoint methods; do
+  if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+    # Find all files where the endpoint is used (excluding specified file and API spec)
+    files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+    
+    if [ -n "$files" ]; then
+      status="${GREEN}✓ USED${NC}"
+      # Count files
+      count=$(fast_count_files "$files")
+      files_formatted=$(format_file_list "$files" "$count" "table")
+    else
+      status="${RED}✗ UNUSED${NC}"
+      count=0
+      files_formatted="-"
+    fi
+    
+    # Skip if unused-only filter is set and endpoint is used
+    if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+      continue
+    fi
+    
+    # Add row to table data
+    table_data+="$endpoint|${YELLOW}$methods${NC}|$status|$count|${BLUE}$files_formatted${NC}\n"
   fi
-  
-  # Skip if unused-only filter is set and endpoint is used
-  if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-    continue
-  fi
-  
-  # Add row to table data
-  table_data+="$endpoint|$status|$count|${BLUE}$files_formatted${NC}\n"
-done
+done <<< "$endpoints"
 
 # Print the table using column for proper alignment
 printf "%b" "$table_data" | column -t -s '|'
@@ -511,18 +838,20 @@ unused_endpoints=0
 total_files=0
 
 # Count usage statistics
-for endpoint in $endpoints; do
-  files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-  if [ -n "$files" ]; then
-    ((used_endpoints++))
-    if [ "$QUICK_MODE" = false ]; then
-      file_count=$(echo "$files" | wc -l)
-      total_files=$((total_files + file_count))
+while IFS='|' read -r endpoint methods; do
+  if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+    files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+    if [ -n "$files" ]; then
+      ((used_endpoints++))
+      if [ "$QUICK_MODE" = false ]; then
+        file_count=$(echo "$files" | wc -l)
+        total_files=$((total_files + file_count))
+      fi
+    else
+      ((unused_endpoints++))
     fi
-  else
-    ((unused_endpoints++))
   fi
-done
+done <<< "$endpoints"
 
 total_endpoints=$((used_endpoints + unused_endpoints))
 
@@ -544,43 +873,9 @@ fi
 if [ "$VERBOSE" = true ]; then
   printf "\n${BOLD}Detailed File References:${NC}\n"
   detailed_shown=false
-  for endpoint in $endpoints; do
-    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-    if [ -n "$files" ]; then
-      count=$(fast_count_files "$files")
-      
-      # Skip if unused-only filter is set and endpoint is used
-      if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-        continue
-      fi
-      
-      if [ "$count" != "0" ]; then
-        detailed_shown=true
-        if [ "$QUICK_MODE" = true ]; then
-          printf "\n${YELLOW}%s${NC} (files found):\n" "$endpoint"
-        else
-          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
-        fi
-        echo "$files" | while read -r file; do
-          if [ -n "$file" ]; then
-            rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
-            clean_path=${rel_path#app/}
-            printf "  ${BLUE}• %s${NC}\n" "$clean_path"
-          fi
-        done
-      fi
-    fi
-  done
-  
-  if [ "$detailed_shown" = false ]; then
-    printf "  ${DIM}No matching endpoints found.${NC}\n"
-  fi
-elif [ "$QUICK_MODE" = false ]; then
-  if [ "$TRUNCATE_FILES" = true ]; then
-    printf "\n${BOLD}Detailed File References (for endpoints with 3+ usages):${NC}\n"
-    detailed_shown=false
-    for endpoint in $endpoints; do
-      files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+  while IFS='|' read -r endpoint methods; do
+    if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+      files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
       if [ -n "$files" ]; then
         count=$(fast_count_files "$files")
         
@@ -589,9 +884,13 @@ elif [ "$QUICK_MODE" = false ]; then
           continue
         fi
         
-        if [ "$count" -ge 3 ]; then
+        if [ "$count" != "0" ]; then
           detailed_shown=true
-          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
+          if [ "$QUICK_MODE" = true ]; then
+            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (files found):\n" "$endpoint" "$methods"
+          else
+            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+          fi
           echo "$files" | while read -r file; do
             if [ -n "$file" ]; then
               rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
@@ -601,7 +900,41 @@ elif [ "$QUICK_MODE" = false ]; then
           done
         fi
       fi
-    done
+    fi
+  done <<< "$endpoints"
+  
+  if [ "$detailed_shown" = false ]; then
+    printf "  ${DIM}No matching endpoints found.${NC}\n"
+  fi
+elif [ "$QUICK_MODE" = false ]; then
+  if [ "$TRUNCATE_FILES" = true ]; then
+    printf "\n${BOLD}Detailed File References (for endpoints with 3+ usages):${NC}\n"
+    detailed_shown=false
+    while IFS='|' read -r endpoint methods; do
+      if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+        files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+        if [ -n "$files" ]; then
+          count=$(fast_count_files "$files")
+          
+          # Skip if unused-only filter is set and endpoint is used
+          if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+            continue
+          fi
+          
+          if [ "$count" -ge 3 ]; then
+            detailed_shown=true
+            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+            echo "$files" | while read -r file; do
+              if [ -n "$file" ]; then
+                rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+                clean_path=${rel_path#app/}
+                printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+              fi
+            done
+          fi
+        fi
+      fi
+    done <<< "$endpoints"
 
     if [ "$detailed_shown" = false ]; then
       if [ "$UNUSED_ONLY" = true ]; then
@@ -613,29 +946,31 @@ elif [ "$QUICK_MODE" = false ]; then
   else
     printf "\n${BOLD}Detailed File References (for endpoints with 2+ usages):${NC}\n"
     detailed_shown=false
-    for endpoint in $endpoints; do
-      files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-      if [ -n "$files" ]; then
-        count=$(fast_count_files "$files")
-        
-        # Skip if unused-only filter is set and endpoint is used
-        if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-          continue
-        fi
-        
-        if [ "$count" -ge 2 ] && [ "$count" != "1+" ]; then
-          detailed_shown=true
-          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
-          echo "$files" | while read -r file; do
-            if [ -n "$file" ]; then
-              rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
-              clean_path=${rel_path#app/}
-              printf "  ${BLUE}• %s${NC}\n" "$clean_path"
-            fi
-          done
+    while IFS='|' read -r endpoint methods; do
+      if [ -n "$endpoint" ] && [ -n "$methods" ]; then
+        files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+        if [ -n "$files" ]; then
+          count=$(fast_count_files "$files")
+          
+          # Skip if unused-only filter is set and endpoint is used
+          if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+            continue
+          fi
+          
+          if [ "$count" -ge 2 ] && [ "$count" != "1+" ]; then
+            detailed_shown=true
+            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+            echo "$files" | while read -r file; do
+              if [ -n "$file" ]; then
+                rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+                clean_path=${rel_path#app/}
+                printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+              fi
+            done
+          fi
         fi
       fi
-    done
+    done <<< "$endpoints"
 
     if [ "$detailed_shown" = false ]; then
       if [ "$UNUSED_ONLY" = true ]; then
@@ -647,5 +982,8 @@ elif [ "$QUICK_MODE" = false ]; then
   fi
 fi
 
-printf "\n${DIM}Note: This script searches for exact string matches of endpoint paths in quotes.${NC}\n"
+printf "\n${DIM}Note: This script searches for endpoint usage in multiple patterns:${NC}\n"
+printf "${DIM}      1. Exact string matches: \"$endpoint\"${NC}\n"
+printf "${DIM}      2. Method calls: .GET(\"$endpoint\"), .POST(\"$endpoint\"), etc.${NC}\n"
+printf "${DIM}      3. Path parameters: {id} matches actual values like 123, abc, etc.${NC}\n"
 printf "${DIM}      The API spec file is automatically excluded from the search results.${NC}\n"
