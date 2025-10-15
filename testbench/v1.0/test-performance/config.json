@@ -1,0 +1,9 @@
+{
+  "name": "test-performance",
+  "description": "Performance test with larger spec and multiple files",
+  "args": ["-s", "large-spec.json", "-d", "src", "--no-colors"],
+  "expected_exit_code": 0,
+  "performance": {
+    "max_time_seconds": 5
+  }
+}

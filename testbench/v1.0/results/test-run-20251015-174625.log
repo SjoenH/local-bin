@@ -1,0 +1,36 @@
+2025-10-15 17:46:25 Starting epcheck testbench v1.0
+2025-10-15 17:46:25 Results will be saved to: /Users/henry/.local/bin/testbench/v1.0/results
+2025-10-15 17:46:25 Log file: /Users/henry/.local/bin/testbench/v1.0/results/test-run-20251015-174625.log
+2025-10-15 17:46:25 =========================================
+2025-10-15 17:46:25 🔍 Discovering test cases...
+2025-10-15 17:46:25 📋 Found 5 test cases
+2025-10-15 17:46:25 
+2025-10-15 17:46:25 🧪 Running test: test-basic
+2025-10-15 17:46:25 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-basic
+2025-10-15 17:46:26 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors 
+2025-10-15 17:46:28 ⏱️  Execution time: 2.00s
+2025-10-15 17:46:28 🔍 Validating table output...
+2025-10-15 17:46:28 ✅ table output validation passed
+2025-10-15 17:46:28 ✅ Test test-basic PASSED
+2025-10-15 17:46:28 
+2025-10-15 17:46:28 🧪 Running test: test-complex
+2025-10-15 17:46:28 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-complex
+2025-10-15 17:46:28 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.yaml -d src --no-colors 
+2025-10-15 17:46:30 ⏱️  Execution time: 2.00s
+2025-10-15 17:46:30 ✅ Test test-complex PASSED
+2025-10-15 17:46:30 
+2025-10-15 17:46:30 🧪 Running test: test-edge-cases
+2025-10-15 17:46:30 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases
+2025-10-15 17:46:30 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s no-usage-spec.json -d src --no-colors 
+2025-10-15 17:46:32 ⏱️  Execution time: 2.00s
+2025-10-15 17:46:32 ✅ Test test-edge-cases PASSED
+2025-10-15 17:46:32 
+2025-10-15 17:46:32 🧪 Running test: test-options
+2025-10-15 17:46:32 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-options
+2025-10-15 17:46:32 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors
+2025-10-15 17:46:32 ⏱️  Execution time: 0s
+2025-10-15 17:46:32 ❌ Test test-options FAILED - Expected exit code 0, got 1
+2025-10-15 17:46:32 Error output:
+No OpenAPI spec provided, searching for common spec files...
+Error: No OpenAPI spec file found. Please specify one with -s/--spec.
+Common file names: openapi.json, openapi.yaml, swagger.json, etc.

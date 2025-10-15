@@ -1,0 +1,50 @@
+2025-10-15 17:47:54 Starting epcheck testbench v1.0
+2025-10-15 17:47:54 Results will be saved to: /Users/henry/.local/bin/testbench/v1.0/results
+2025-10-15 17:47:54 Log file: /Users/henry/.local/bin/testbench/v1.0/results/test-run-20251015-174754.log
+2025-10-15 17:47:54 =========================================
+2025-10-15 17:47:54 🔍 Discovering test cases...
+2025-10-15 17:47:55 📋 Found 4 test cases
+2025-10-15 17:47:55 
+2025-10-15 17:47:55 🧪 Running test: test-basic
+2025-10-15 17:47:55 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-basic
+2025-10-15 17:47:55 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors 
+2025-10-15 17:47:57 ⏱️  Execution time: 2.00s
+2025-10-15 17:47:57 🔍 Validating table output...
+2025-10-15 17:47:57 ✅ table output validation passed
+2025-10-15 17:47:57 ✅ Test test-basic PASSED
+2025-10-15 17:47:57 
+2025-10-15 17:47:57 🧪 Running test: test-complex
+2025-10-15 17:47:57 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-complex
+2025-10-15 17:47:57 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.yaml -d src --no-colors 
+2025-10-15 17:47:59 ⏱️  Execution time: 2.00s
+2025-10-15 17:47:59 ✅ Test test-complex PASSED
+2025-10-15 17:47:59 
+2025-10-15 17:47:59 🧪 Running test: test-edge-cases
+2025-10-15 17:47:59 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases
+2025-10-15 17:47:59 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s no-usage-spec.json -d src --no-colors 
+2025-10-15 17:48:01 ⏱️  Execution time: 2.00s
+2025-10-15 17:48:01 ✅ Test test-edge-cases PASSED
+2025-10-15 17:48:01 
+2025-10-15 17:48:01 🧪 Running test: test-performance
+2025-10-15 17:48:01 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-performance
+2025-10-15 17:48:01 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s large-spec.json -d src --no-colors 
+2025-10-15 17:48:03 ⏱️  Execution time: 2.00s
+2025-10-15 17:48:03 ✅ Test test-performance PASSED
+2025-10-15 17:48:03 
+2025-10-15 17:48:03 =========================================
+2025-10-15 17:48:03 📊 TEST SUMMARY
+2025-10-15 17:48:03 =========================================
+2025-10-15 17:48:04 Total tests: 4
+2025-10-15 17:48:04 ✅ Passed: 4
+2025-10-15 17:48:04 ❌ Failed: 0
+2025-10-15 17:48:04 ⚠️  Skipped: 0
+2025-10-15 17:48:04 📈 Pass rate: 100%
+2025-10-15 17:48:04 
+2025-10-15 17:48:04 ⏱️  PERFORMANCE SUMMARY
+2025-10-15 17:48:04 =========================================
+2025-10-15 17:48:04   test-basic: 2.00s
+2025-10-15 17:48:04   test-complex: 2.00s
+2025-10-15 17:48:04   test-edge-cases: 2.00s
+2025-10-15 17:48:04   test-performance: 2.00s
+2025-10-15 17:48:04 📄 Summary saved to: /Users/henry/.local/bin/testbench/v1.0/results/summary.txt
+2025-10-15 17:48:04 🎉 All tests passed!

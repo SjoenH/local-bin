@@ -1,0 +1,32 @@
+
+OpenAPI Endpoint Usage Report
+Generated on Wed Oct 15 17:50:49 CEST 2025
+API Spec: /Users/henry/.local/bin/testbench/v1.0/test-basic/openapi.json
+Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-basic/src
+Excluding: openapi.json
+Search: ripgrep (fast)
+Mode: Full file lists (use --truncate to limit)
+
+Endpoint         Methods   Status    Count     Files
+/api/users       GET,POST  ✓ USED           2  /Users/henry/.local/bin/testbench/v1.0/test-basic/src/traditionalCalls.ts, /Users/henry/.local/bin/testbench/v1.0/test-basic/src/userService.ts
+/api/users/{id}  GET,PUT   ✗ UNUSED  0         -
+/api/products    GET       ✗ UNUSED  0         -
+
+Summary:
+  Total endpoints: 3
+  Used: 1
+  Unused: 2
+  Coverage: 33.3%
+  Total file references: 2
+
+Detailed File References (for endpoints with 2+ usages):
+
+/api/users [GET,POST] (       2 files):
+  • /Users/henry/.local/bin/testbench/v1.0/test-basic/src/traditionalCalls.ts
+  • /Users/henry/.local/bin/testbench/v1.0/test-basic/src/userService.ts
+
+Note: This script searches for endpoint usage in multiple patterns:
+      1. Exact string matches: ""
+      2. Method calls: .GET(""), .POST(""), etc.
+      3. Path parameters: {id} matches actual values like 123, abc, etc.
+      The API spec file is automatically excluded from the search results.

@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Large Performance Test API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/users": {
+      "get": {"summary": "Get users", "responses": {"200": {"description": "OK"}}},
+      "post": {"summary": "Create user", "responses": {"201": {"description": "Created"}}}
+    },
+    "/api/users/{id}": {
+      "get": {"summary": "Get user", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "put": {"summary": "Update user", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "delete": {"summary": "Delete user", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "No Content"}}}
+    },
+    "/api/products": {
+      "get": {"summary": "Get products", "responses": {"200": {"description": "OK"}}},
+      "post": {"summary": "Create product", "responses": {"201": {"description": "Created"}}}
+    },
+    "/api/products/{id}": {
+      "get": {"summary": "Get product", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "put": {"summary": "Update product", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "delete": {"summary": "Delete product", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "No Content"}}}
+    },
+    "/api/orders": {
+      "get": {"summary": "Get orders", "responses": {"200": {"description": "OK"}}},
+      "post": {"summary": "Create order", "responses": {"201": {"description": "Created"}}}
+    },
+    "/api/orders/{id}": {
+      "get": {"summary": "Get order", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "put": {"summary": "Update order", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "delete": {"summary": "Delete order", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "No Content"}}}
+    },
+    "/api/categories": {
+      "get": {"summary": "Get categories", "responses": {"200": {"description": "OK"}}},
+      "post": {"summary": "Create category", "responses": {"201": {"description": "Created"}}}
+    },
+    "/api/categories/{id}": {
+      "get": {"summary": "Get category", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "put": {"summary": "Update category", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "delete": {"summary": "Delete category", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "No Content"}}}
+    },
+    "/api/reviews": {
+      "get": {"summary": "Get reviews", "responses": {"200": {"description": "OK"}}},
+      "post": {"summary": "Create review", "responses": {"201": {"description": "Created"}}}
+    },
+    "/api/reviews/{id}": {
+      "get": {"summary": "Get review", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "put": {"summary": "Update review", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "OK"}}},
+      "delete": {"summary": "Delete review", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"204": {"description": "No Content"}}}
+    }
+  }
+}

@@ -1,0 +1,30 @@
+2025-10-15 17:45:55 Starting epcheck testbench v1.0
+2025-10-15 17:45:55 Results will be saved to: /Users/henry/.local/bin/testbench/v1.0/results
+2025-10-15 17:45:55 Log file: /Users/henry/.local/bin/testbench/v1.0/results/test-run-20251015-174555.log
+2025-10-15 17:45:55 =========================================
+2025-10-15 17:45:55 🔍 Discovering test cases...
+2025-10-15 17:45:55 📋 Found 5 test cases
+2025-10-15 17:45:55 
+2025-10-15 17:45:55 🧪 Running test: test-basic
+2025-10-15 17:45:55 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-basic
+2025-10-15 17:45:55 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors 
+2025-10-15 17:45:57 ⏱️  Execution time: 2.00s
+2025-10-15 17:45:57 🔍 Validating table output...
+2025-10-15 17:45:57 ✅ table output validation passed
+2025-10-15 17:45:57 ✅ Test test-basic PASSED
+2025-10-15 17:45:57 
+2025-10-15 17:45:57 🧪 Running test: test-complex
+2025-10-15 17:45:57 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-complex
+2025-10-15 17:45:57 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors
+2025-10-15 17:45:59 ⏱️  Execution time: 2.00s
+2025-10-15 17:45:59 ✅ Test test-complex PASSED
+2025-10-15 17:45:59 
+2025-10-15 17:45:59 🧪 Running test: test-edge-cases
+2025-10-15 17:45:59 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases
+2025-10-15 17:45:59 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors
+2025-10-15 17:46:00 ⏱️  Execution time: 1.00s
+2025-10-15 17:46:00 ❌ Test test-edge-cases FAILED - Expected exit code 0, got 1
+2025-10-15 17:46:00 Error output:
+No OpenAPI spec provided, searching for common spec files...
+Error: No OpenAPI spec file found. Please specify one with -s/--spec.
+Common file names: openapi.json, openapi.yaml, swagger.json, etc.

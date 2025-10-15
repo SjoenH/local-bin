@@ -1,0 +1,6 @@
+{
+  "name": "test-edge-cases",
+  "description": "Edge cases with empty specs and no usage",
+  "args": ["-s", "no-usage-spec.json", "-d", "src", "--no-colors"],
+  "expected_exit_code": 0
+}

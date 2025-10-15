@@ -1,0 +1,6 @@
+{
+  "name": "test-complex",
+  "description": "Complex test with nested paths and YAML spec",
+  "args": ["-s", "openapi.yaml", "-d", "src", "--no-colors"],
+  "expected_exit_code": 0
+}

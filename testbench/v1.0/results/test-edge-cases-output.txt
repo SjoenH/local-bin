@@ -1,0 +1,27 @@
+
+OpenAPI Endpoint Usage Report
+Generated on Wed Oct 15 17:50:53 CEST 2025
+API Spec: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases/no-usage-spec.json
+Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases/src
+Excluding: no-usage-spec.json
+Search: ripgrep (fast)
+Mode: Full file lists (use --truncate to limit)
+
+Endpoint   Methods  Status    Count  Files
+/api/test  GET      ✗ UNUSED  0      -
+
+Summary:
+  Total endpoints: 1
+  Used: 0
+  Unused: 1
+  Coverage: 0%
+  Total file references: 0
+
+Detailed File References (for endpoints with 2+ usages):
+  No endpoints with 2 or more file references found.
+
+Note: This script searches for endpoint usage in multiple patterns:
+      1. Exact string matches: ""
+      2. Method calls: .GET(""), .POST(""), etc.
+      3. Path parameters: {id} matches actual values like 123, abc, etc.
+      The API spec file is automatically excluded from the search results.
