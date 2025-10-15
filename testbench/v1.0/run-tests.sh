@@ -13,9 +13,11 @@ NC='\033[0m' # No Color
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EPCHECK_PATH="$SCRIPT_DIR/../../epcheck"
+EPCHECK_PATH="/Users/henry/.local/bin/epcheck"
 TESTBENCH_ROOT="$SCRIPT_DIR"
 RESULTS_DIR="$TESTBENCH_ROOT/results"
+DATABASE_FILE="$RESULTS_DIR/testbench.db"
+SCHEMA_FILE="$SCRIPT_DIR/schema.sql"
 LOG_FILE="$RESULTS_DIR/test-run-$(date +%Y%m%d-%H%M%S).log"
 
 # Statistics
@@ -27,9 +29,118 @@ SKIPPED_TESTS=0
 # Performance tracking
 PERF_DATA=()
 
+# Database variables
+CURRENT_TEST_RUN_ID=""
+
 # Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | tee -a "$LOG_FILE"
+}
+
+# Database initialization function
+init_database() {
+    log "🗄️  Initializing SQLite database..."
+
+    # Create results directory if it doesn't exist
+    mkdir -p "$RESULTS_DIR"
+
+    # Check if sqlite3 is available
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        log "❌ sqlite3 command not found. Please install SQLite3."
+        exit 1
+    fi
+
+    # Create database and tables
+    if [ -f "$SCHEMA_FILE" ]; then
+        if sqlite3 "$DATABASE_FILE" < "$SCHEMA_FILE"; then
+            log "✅ Database initialized successfully"
+        else
+            log "❌ Failed to initialize database"
+            exit 1
+        fi
+    else
+        log "❌ Schema file not found: $SCHEMA_FILE"
+        exit 1
+    fi
+}
+
+# Function to start a new test run
+start_test_run() {
+    log "📝 Starting new test run..."
+
+    # Insert new test run record
+    CURRENT_TEST_RUN_ID=$(sqlite3 "$DATABASE_FILE" "
+        INSERT INTO test_runs (run_timestamp, status)
+        VALUES (datetime('now'), 'running');
+        SELECT last_insert_rowid();
+    ")
+
+    if [ -n "$CURRENT_TEST_RUN_ID" ]; then
+        log "✅ Test run started with ID: $CURRENT_TEST_RUN_ID"
+    else
+        log "❌ Failed to start test run"
+        exit 1
+    fi
+}
+
+# Function to load expected results into database
+load_expected_results() {
+    local test_name="$1"
+    local test_dir="$2"
+
+    log "📥 Loading expected results for $test_name..."
+
+    for expected_file in "$test_dir"/expected-*.txt; do
+        if [ -f "$expected_file" ]; then
+            local format
+            format=$(basename "$expected_file" | sed 's/expected-\(.*\)\.txt/\1/')
+
+            # Read file content and escape for SQL
+            local content
+            content=$(cat "$expected_file" | sed "s/'/''/g")
+
+            # Insert or replace expected result
+            sqlite3 "$DATABASE_FILE" "
+                INSERT OR REPLACE INTO expected_results (test_name, output_format, expected_content, last_updated)
+                VALUES ('$test_name', '$format', '$content', datetime('now'));
+            "
+        fi
+    done
+}
+
+# Function to complete a test run
+complete_test_run() {
+    local final_status="$1"
+
+    log "📝 Completing test run..."
+
+    # Calculate final counts from test executions
+    local final_counts
+    final_counts=$(sqlite3 "$DATABASE_FILE" "
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
+        FROM test_executions
+        WHERE test_run_id = $CURRENT_TEST_RUN_ID;
+    ")
+
+    IFS='|' read -r TOTAL_TESTS PASSED_TESTS FAILED_TESTS SKIPPED_TESTS <<< "$final_counts"
+
+    # Update test run with final status and counts
+    sqlite3 "$DATABASE_FILE" "
+        UPDATE test_runs
+        SET status = '$final_status',
+            total_tests = $TOTAL_TESTS,
+            passed_tests = $PASSED_TESTS,
+            failed_tests = $FAILED_TESTS,
+            skipped_tests = $SKIPPED_TESTS,
+            log_file = '$LOG_FILE'
+        WHERE id = $CURRENT_TEST_RUN_ID;
+    "
+
+    log "✅ Test run completed with status: $final_status"
 }
 
 # Create results directory
@@ -106,42 +217,43 @@ run_test() {
     # Change to test directory
     cd "$test_dir"
 
+    # Load expected results into database
+    load_expected_results "$test_name" "$test_dir"
+
     # Run epcheck and capture output
     local start_time
-    start_time=$(date +%s.%3N)
+    start_time=$(date +%s)
 
-    local output_file="$RESULTS_DIR/${test_name}-output.txt"
-    local error_file="$RESULTS_DIR/${test_name}-error.txt"
-    local time_file="$RESULTS_DIR/${test_name}-time.txt"
+    local output_content=""
+    local error_content=""
+    local time_content=""
     local exit_code=0
 
     log "🚀 Executing: $EPCHECK_PATH $args"
 
     # Use /usr/bin/time to capture memory usage if available
-    if command -v /usr/bin/time >/dev/null 2>&1; then
+    if false && command -v /usr/bin/time >/dev/null 2>&1; then
         # Capture both stdout and stderr from time
         time_output=$(/usr/bin/time -l "$EPCHECK_PATH" $args 2>&1)
         exit_code=$?
 
         # Extract the program's stdout (everything before time statistics)
-        echo "$time_output" | sed '/^[[:space:]]*[0-9]\+\.[0-9]/,$d' | grep -v "Using npx" > "$output_file"
+        output_content=$(echo "$time_output" | sed '/^[[:space:]]*[0-9]\+\.[0-9]/,$d' | grep -v "Using npx")
 
         # Extract the program's stderr (the "Using npx" line)
-        echo "$time_output" | grep "Using npx" > "$error_file"
+        error_content=$(echo "$time_output" | grep "Using npx")
 
         # Extract time statistics
-        echo "$time_output" | grep -A 20 "maximum resident set size" > "$time_file"
+        time_content=$(echo "$time_output" | grep -A 20 "maximum resident set size")
     else
-        if "$EPCHECK_PATH" $args > "$output_file" 2> "$error_file"; then
-            exit_code=$?
-        else
-            exit_code=$?
-        fi
-        echo "Memory monitoring not available" > "$time_file"
+        output_content=$("$EPCHECK_PATH" $args 2>&1 | grep -v "Using npx")
+        exit_code=$?
+        time_content="Memory monitoring not available"
+        memory_bytes=0
     fi
 
     local end_time
-    end_time=$(date +%s.%3N)
+    end_time=$(date +%s)
     local duration
     duration=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "0")
 
@@ -162,6 +274,21 @@ run_test() {
         log "⏱️  Execution time: ${duration}s"
     fi
 
+    # Insert test execution into database
+    local test_execution_id
+    test_execution_id=$(sqlite3 "$DATABASE_FILE" "
+        INSERT INTO test_executions (
+            test_run_id, test_name, test_directory, start_time, end_time,
+            duration_seconds, memory_mb, exit_code, expected_exit_code, status
+        ) VALUES (
+            $CURRENT_TEST_RUN_ID, '$test_name', '$test_dir', $start_time, $end_time,
+            $duration, $memory_mb, $exit_code, $expected_exit_code, 'running'
+        );
+        SELECT last_insert_rowid();
+    ")
+
+    log "📝 Test execution recorded with ID: $test_execution_id"
+
     # Check exit code
     if [ "$exit_code" -ne "$expected_exit_code" ]; then
         log "❌ Test $test_name FAILED - Expected exit code $expected_exit_code, got $exit_code"
@@ -171,35 +298,61 @@ run_test() {
         return
     fi
 
-    # Validate output against expected files
+    # Validate output against expected results in database
     local test_passed=true
 
     for format in $expected_files; do
-        local expected_file="$test_dir/expected-${format}.txt"
-        if [ -f "$expected_file" ]; then
-            log "🔍 Validating $format output..."
+        log "🔍 Validating $format output..."
 
-            # Normalize output for comparison (remove timestamps, absolute paths)
-            local normalized_output="$output_file.normalized"
-            local normalized_expected="$expected_file.normalized"
+        # Get expected content from database
+        local expected_content
+        expected_content=$(sqlite3 "$DATABASE_FILE" "
+            SELECT expected_content FROM expected_results
+            WHERE test_name = '$test_name' AND output_format = '$format';
+        ")
 
-             # Normalize actual output (remove time statistics at end)
-             sed 's/Generated on.*/Generated on [DATE]/g; s|API Spec: .*/test-[^/]*/[^ ]*|API Spec: [SPEC_PATH]|g; s|Search Dir: .*/test-[^/]*/[^ ]*|Search Dir: [DIR_PATH]|g; s|.*/testbench/v1.0/test-basic/src/||g; /DEBUG/d; /^[[:space:]]*[0-9][0-9]*\.[0-9]/,$d' "$output_file" > "$normalized_output"
-
-            # Normalize expected output (should already be normalized)
-            cp "$expected_file" "$normalized_expected"
+        if [ -n "$expected_content" ]; then
+            # Normalize actual output for comparison (remove timestamps, absolute paths)
+            local normalized_output
+            normalized_output=$(echo "$output_content" | sed 's/Generated on.*/Generated on [DATE]/g; s|API Spec: .*/test-[^/]*/[^ ]*|API Spec: [SPEC_PATH]|g; s|Search Dir: .*/test-[^/]*/[^ ]*|Search Dir: [DIR_PATH]|g; s|.*/testbench/v1.0/test-basic/src/||g; /DEBUG/d; /^[[:space:]]*[0-9][0-9]*\.[0-9]/,$d')
 
             # Compare normalized outputs
-            if diff -q "$normalized_expected" "$normalized_output" >/dev/null 2>&1; then
+            if [ "$normalized_output" = "$expected_content" ]; then
                 log "✅ $format output validation passed"
+
+                # Insert validation result
+                sqlite3 "$DATABASE_FILE" "
+                    INSERT INTO test_validations (
+                        test_execution_id, output_format, validation_status,
+                        expected_content, actual_content
+                    ) VALUES (
+                        $test_execution_id, '$format', 'passed',
+                        '$expected_content', '$normalized_output'
+                    );
+                "
             else
                 log "❌ $format output validation failed"
-                log "Differences found. Run: diff '$normalized_expected' '$normalized_output'"
+
+                # Calculate differences
+                local differences
+                differences=$(diff -u <(echo "$expected_content") <(echo "$normalized_output") 2>/dev/null || echo "diff failed")
+
+                # Insert validation result with failure
+                sqlite3 "$DATABASE_FILE" "
+                    INSERT INTO test_validations (
+                        test_execution_id, output_format, validation_status,
+                        expected_content, actual_content, differences
+                    ) VALUES (
+                        $test_execution_id, '$format', 'failed',
+                        '$expected_content', '$normalized_output', '$differences'
+                    );
+                "
+
                 test_passed=false
             fi
-
-            # Clean up normalized files
-            rm -f "$normalized_output" "$normalized_expected"
+        else
+            log "⚠️  No expected results found for $format format"
+            test_passed=false
         fi
     done
 
@@ -210,10 +363,17 @@ run_test() {
         PERF_DATA+=("$test_name:$duration")
     fi
 
+    # Update test execution status in database
     if [ "$test_passed" = true ]; then
+        sqlite3 "$DATABASE_FILE" "
+            UPDATE test_executions SET status = 'passed' WHERE id = $test_execution_id;
+        "
         log "✅ Test $test_name PASSED"
         ((PASSED_TESTS++))
     else
+        sqlite3 "$DATABASE_FILE" "
+            UPDATE test_executions SET status = 'failed' WHERE id = $test_execution_id;
+        "
         log "❌ Test $test_name FAILED"
         ((FAILED_TESTS++))
     fi
@@ -245,6 +405,21 @@ generate_summary() {
     log "========================================="
     log "📊 TEST SUMMARY"
     log "========================================="
+
+    # Calculate summary data from test executions
+    local db_summary
+    db_summary=$(sqlite3 "$DATABASE_FILE" "
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) as passed,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
+        FROM test_executions
+        WHERE test_run_id = $CURRENT_TEST_RUN_ID;
+    ")
+
+    IFS='|' read -r TOTAL_TESTS PASSED_TESTS FAILED_TESTS SKIPPED_TESTS <<< "$db_summary"
+
     log "Total tests: $TOTAL_TESTS"
     log "✅ Passed: $PASSED_TESTS"
     log "❌ Failed: $FAILED_TESTS"
@@ -256,14 +431,23 @@ generate_summary() {
         log "📈 Pass rate: ${pass_rate}%"
     fi
 
-    # Performance summary
-    if [ ${#PERF_DATA[@]} -gt 0 ]; then
+    # Performance summary from database
+    local perf_data
+    perf_data=$(sqlite3 "$DATABASE_FILE" -separator ':' "
+        SELECT
+            test_name,
+            printf('%.3f', duration_seconds),
+            CASE WHEN memory_mb > 0 THEN printf('%dMB', memory_mb) ELSE '' END
+        FROM test_executions
+        WHERE test_run_id = $CURRENT_TEST_RUN_ID
+        ORDER BY test_name;
+    ")
+
+    if [ -n "$perf_data" ]; then
         log ""
         log "⏱️  PERFORMANCE SUMMARY"
         log "========================================="
-        for perf in "${PERF_DATA[@]}"; do
-            local test_name duration memory
-            IFS=':' read -r test_name duration memory <<< "$perf"
+        echo "$perf_data" | while IFS=':' read -r test_name duration memory; do
             if [ -n "$memory" ]; then
                 log "  $test_name: ${duration}s | ${memory}"
             else
@@ -283,8 +467,12 @@ generate_summary() {
         echo "Skipped: $SKIPPED_TESTS"
         echo ""
         echo "Performance Data:"
-        for perf in "${PERF_DATA[@]}"; do
-            echo "  $perf"
+        echo "$perf_data" | while IFS=':' read -r test_name duration memory; do
+            if [ -n "$memory" ]; then
+                echo "  $test_name: ${duration}s | ${memory}"
+            else
+                echo "  $test_name: ${duration}s"
+            fi
         done
     } > "$summary_file"
 
@@ -293,17 +481,94 @@ generate_summary() {
 
 # Main execution
 main() {
+    # Initialize database
+    init_database
+
+    # Start test run
+    start_test_run
+
+    # Run all tests
     run_all_tests
+
+    # Generate summary
     generate_summary
 
-    # Exit with failure if any tests failed
+    # Complete test run
     if [ $FAILED_TESTS -gt 0 ]; then
+        complete_test_run "failed"
         log "❌ Some tests failed. Check the log file for details."
         exit 1
     else
+        complete_test_run "completed"
         log "🎉 All tests passed!"
         exit 0
     fi
+}
+
+# Database query functions
+
+# Get recent test runs
+query_recent_runs() {
+    local limit="${1:-10}"
+    sqlite3 -header -column "$DATABASE_FILE" "
+        SELECT
+            id,
+            run_timestamp,
+            total_tests,
+            passed_tests,
+            failed_tests,
+            skipped_tests,
+            status
+        FROM test_runs
+        ORDER BY run_timestamp DESC
+        LIMIT $limit;
+    "
+}
+
+# Get test execution details for a specific run
+query_test_run_details() {
+    local run_id="$1"
+    sqlite3 -header -column "$DATABASE_FILE" "
+        SELECT
+            te.test_name,
+            te.status,
+            printf('%.3f', te.duration_seconds) as duration,
+            CASE WHEN te.memory_mb > 0 THEN printf('%dMB', te.memory_mb) ELSE 'N/A' END as memory,
+            te.exit_code
+        FROM test_executions te
+        WHERE te.test_run_id = $run_id
+        ORDER BY te.test_name;
+    "
+}
+
+# Get validation failures for a specific run
+query_validation_failures() {
+    local run_id="$1"
+    sqlite3 -header -column "$DATABASE_FILE" "
+        SELECT
+            te.test_name,
+            tv.output_format,
+            tv.validation_status,
+            substr(tv.differences, 1, 100) || '...' as diff_preview
+        FROM test_executions te
+        JOIN test_validations tv ON te.id = tv.test_execution_id
+        WHERE te.test_run_id = $run_id AND tv.validation_status = 'failed'
+        ORDER BY te.test_name, tv.output_format;
+    "
+}
+
+# Show usage for database queries
+show_query_help() {
+    cat << EOF
+Database Query Functions:
+  query_recent_runs [limit]     - Show recent test runs (default: 10)
+  query_test_run_details <id>   - Show details for a specific test run
+  query_validation_failures <id> - Show validation failures for a test run
+
+Example usage:
+  $0 && query_recent_runs 5
+  $0 && query_test_run_details 1
+EOF
 }
 
 # Run main function

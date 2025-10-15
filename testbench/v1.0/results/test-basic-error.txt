@@ -1,1 +1,0 @@
-Using npx openapi-typescript to parse OpenAPI spec
