@@ -1,0 +1,13 @@
+{
+  "name": "test-options",
+  "description": "CLI options testing - unused-only flag",
+  "args": ["-s", "openapi.json", "-d", "src", "--unused-only", "--no-colors"],
+  "expected_exit_code": 0,
+  "expected_files": {
+    "table": "expected-table.txt"
+  },
+  "performance": {
+    "max_time_seconds": 10,
+    "max_memory_mb": 50
+  }
+}

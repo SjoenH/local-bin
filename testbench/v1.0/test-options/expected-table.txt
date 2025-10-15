@@ -1,0 +1,28 @@
+OpenAPI Endpoint Usage Report
+Generated on [DATE]
+API Spec: [SPEC_PATH]
+Search Dir: [DIR_PATH]
+Excluding: openapi.json
+Search: ripgrep (fast)
+Mode: Full file lists (use --truncate to limit)
+Filter: Unused endpoints only
+
+Endpoint         Methods  Status    Count  Files
+/api/users/{id}  GET,PUT  ✗ UNUSED  0      -
+/api/products    GET      ✗ UNUSED  0      -
+
+Summary:
+  Total endpoints: 3
+  Used: 1
+  Unused: 2
+  Coverage: 33.3%
+  Total file references: 1
+
+Detailed File References (for endpoints with 2+ usages):
+  No unused endpoints have multiple file references.
+
+Note: This script searches for endpoint usage in multiple patterns:
+      1. Exact string matches: ""
+      2. Method calls: .GET(""), .POST(""), etc.
+      3. Path parameters: {id} matches actual values like 123, abc, etc.
+      The API spec file is automatically excluded from the search results.

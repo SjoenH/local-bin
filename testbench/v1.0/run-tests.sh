@@ -112,13 +112,32 @@ run_test() {
 
     local output_file="$RESULTS_DIR/${test_name}-output.txt"
     local error_file="$RESULTS_DIR/${test_name}-error.txt"
+    local time_file="$RESULTS_DIR/${test_name}-time.txt"
     local exit_code=0
 
     log "🚀 Executing: $EPCHECK_PATH $args"
-    if "$EPCHECK_PATH" $args > "$output_file" 2> "$error_file"; then
+
+    # Use /usr/bin/time to capture memory usage if available
+    if command -v /usr/bin/time >/dev/null 2>&1; then
+        # Capture both stdout and stderr from time
+        time_output=$(/usr/bin/time -l "$EPCHECK_PATH" $args 2>&1)
         exit_code=$?
+
+        # Extract the program's stdout (everything before time statistics)
+        echo "$time_output" | sed '/^[[:space:]]*[0-9]\+\.[0-9]/,$d' | grep -v "Using npx" > "$output_file"
+
+        # Extract the program's stderr (the "Using npx" line)
+        echo "$time_output" | grep "Using npx" > "$error_file"
+
+        # Extract time statistics
+        echo "$time_output" | grep -A 20 "maximum resident set size" > "$time_file"
     else
-        exit_code=$?
+        if "$EPCHECK_PATH" $args > "$output_file" 2> "$error_file"; then
+            exit_code=$?
+        else
+            exit_code=$?
+        fi
+        echo "Memory monitoring not available" > "$time_file"
     fi
 
     local end_time
@@ -126,7 +145,22 @@ run_test() {
     local duration
     duration=$(echo "$end_time - $start_time" | bc 2>/dev/null || echo "0")
 
-    log "⏱️  Execution time: ${duration}s"
+    # Parse memory usage from time output (in bytes)
+    local memory_bytes=0
+    if [ -f "$time_file" ] && grep -q "maximum resident set size" "$time_file"; then
+        memory_bytes=$(grep "maximum resident set size" "$time_file" | awk '{print $1}' | tr -d ' ' | head -1)
+    fi
+
+    local memory_mb=0
+    if [ "$memory_bytes" -gt 0 ]; then
+        memory_mb=$(echo "$memory_bytes / 1024 / 1024" | bc 2>/dev/null || echo "0")
+    fi
+
+    if [ "$memory_mb" -gt 0 ]; then
+        log "⏱️  Execution time: ${duration}s | 🧠 Memory: ${memory_mb}MB"
+    else
+        log "⏱️  Execution time: ${duration}s"
+    fi
 
     # Check exit code
     if [ "$exit_code" -ne "$expected_exit_code" ]; then
@@ -145,19 +179,36 @@ run_test() {
         if [ -f "$expected_file" ]; then
             log "🔍 Validating $format output..."
 
-            # For now, just check if output contains expected content
-            # In a more sophisticated version, we'd do proper diffing
-            if grep -q "OpenAPI Endpoint Usage Report" "$output_file"; then
+            # Normalize output for comparison (remove timestamps, absolute paths)
+            local normalized_output="$output_file.normalized"
+            local normalized_expected="$expected_file.normalized"
+
+            # Normalize actual output (remove time statistics at end)
+            sed 's/Generated on.*/Generated on [DATE]/g; s|API Spec: .*/test-[^/]*/|API Spec: [SPEC_PATH]|g; s|Search Dir: .*/test-[^/]*/|Search Dir: [DIR_PATH]|g; /^[[:space:]]*[0-9]/,$d' "$output_file" > "$normalized_output"
+
+            # Normalize expected output (should already be normalized)
+            cp "$expected_file" "$normalized_expected"
+
+            # Compare normalized outputs
+            if diff -q "$normalized_expected" "$normalized_output" >/dev/null 2>&1; then
                 log "✅ $format output validation passed"
             else
                 log "❌ $format output validation failed"
+                log "Differences found. Run: diff '$normalized_expected' '$normalized_output'"
                 test_passed=false
             fi
+
+            # Clean up normalized files
+            rm -f "$normalized_output" "$normalized_expected"
         fi
     done
 
     # Store performance data
-    PERF_DATA+=("$test_name:$duration")
+    if [ "$memory_mb" -gt 0 ]; then
+        PERF_DATA+=("$test_name:$duration:${memory_mb}MB")
+    else
+        PERF_DATA+=("$test_name:$duration")
+    fi
 
     if [ "$test_passed" = true ]; then
         log "✅ Test $test_name PASSED"
@@ -211,9 +262,13 @@ generate_summary() {
         log "⏱️  PERFORMANCE SUMMARY"
         log "========================================="
         for perf in "${PERF_DATA[@]}"; do
-            local test_name duration
-            IFS=':' read -r test_name duration <<< "$perf"
-            log "  $test_name: ${duration}s"
+            local test_name duration memory
+            IFS=':' read -r test_name duration memory <<< "$perf"
+            if [ -n "$memory" ]; then
+                log "  $test_name: ${duration}s | ${memory}"
+            else
+                log "  $test_name: ${duration}s"
+            fi
         done
     fi
 
