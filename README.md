@@ -55,7 +55,7 @@ If you prefer to install manually or the setup script doesn't work:
 
     ```bash
     # Build the optimized binaries
-    for dir in epcheck-rust usersecrets-rust lspkg-rust; do
+    for dir in epcheck usersecrets lspkg; do
         if [ -d "$dir" ]; then
             cd "$dir"
             cargo build --release
@@ -136,7 +136,7 @@ cd ~/projects/local-bin
 
 # Or do it manually:
 # Build the Rust binaries
-cd epcheck-rust
+cd epcheck
 cargo build --release
 cd ..
 
