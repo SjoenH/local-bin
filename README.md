@@ -4,6 +4,8 @@ A collection of personal command-line utilities designed to streamline common de
 
 ## Installation
 
+**Note:** We recommend installing to `~/.local/bin` as it follows the XDG Base Directory specification for user-specific executables. This ensures better compatibility with PATH managers and shell configurations compared to `~/bin`.
+
 ### Prerequisites
 
 Before installing these scripts, ensure you have the following dependencies installed:
@@ -21,8 +23,8 @@ For the fastest setup experience, use the automated setup script:
 
 ```bash
 # Clone the repository
-git clone https://github.com/SjoenH/local-bin.git ~/bin
-cd ~/bin
+git clone https://github.com/SjoenH/local-bin.git ~/.local/bin
+cd ~/.local/bin
 
 # Run the setup script (automates everything)
 ./setup.sh
@@ -39,14 +41,14 @@ The setup script will:
 
 If you prefer to install manually or the setup script doesn't work:
 
-1.  **Clone the repository** to a local directory. We recommend using `~/bin` or `~/.local/bin`:
+1.  **Clone the repository** to a local directory. We recommend using `~/.local/bin` (XDG standard) or `~/bin`:
 
     ```bash
-    # Option 1: Clone to ~/bin
-    git clone https://github.com/SjoenH/local-bin.git ~/bin
-
-    # Option 2: Clone to ~/.local/bin
+    # Option 1: Clone to ~/.local/bin (recommended)
     git clone https://github.com/SjoenH/local-bin.git ~/.local/bin
+
+    # Option 2: Clone to ~/bin
+    git clone https://github.com/SjoenH/local-bin.git ~/bin
     ```
 
 2.  **Build the Rust binaries** (required for epcheck, usersecrets, and lspkg):
@@ -65,31 +67,31 @@ If you prefer to install manually or the setup script doesn't work:
 3.  **Make the scripts executable** (if not already):
 
     ```bash
-    # For ~/bin
-    chmod +x ~/bin/*
-
     # For ~/.local/bin
     chmod +x ~/.local/bin/*
+
+    # For ~/bin
+    chmod +x ~/bin/*
     ```
 
 4.  **Add the directory to your PATH**:
 
     For **Bash** users, add this line to your `~/.bashrc` or `~/.bash_profile`:
     ```bash
+    # For ~/.local/bin (recommended)
+    export PATH="$HOME/.local/bin:$PATH"
+
     # For ~/bin
     export PATH="$HOME/bin:$PATH"
-
-    # For ~/.local/bin
-    export PATH="$HOME/.local/bin:$PATH"
     ```
 
     For **Zsh** users (default on macOS), add this line to your `~/.zshrc`:
     ```bash
+    # For ~/.local/bin (recommended)
+    export PATH="$HOME/.local/bin:$PATH"
+
     # For ~/bin
     export PATH="$HOME/bin:$PATH"
-
-    # For ~/.local/bin
-    export PATH="$HOME/.local/bin:$PATH"
     ```
 
 5.  **Reload your shell configuration**:
