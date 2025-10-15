@@ -1,13 +1,13 @@
-epcheck Testbench v1.0 - Wed Oct 15 21:23:03 CEST 2025
+epcheck Testbench v1.0 - Wed Oct 15 21:41:46 CEST 2025
 ========================================
 Total tests: 5
-Passed: 4
-Failed: 1
+Passed: 5
+Failed: 0
 Skipped: 0
 
 Performance Data:
-  test-basic: 3.000s
-  test-complex: 2.000s
+  test-basic: 2.000s
+  test-complex: 1.000s
   test-edge-cases: 1.000s
-  test-options: 2.000s
+  test-options: 3.000s
   test-performance: 3.000s

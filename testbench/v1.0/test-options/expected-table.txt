@@ -1,3 +1,4 @@
+
 OpenAPI Endpoint Usage Report
 Generated on [DATE]
 API Spec: [SPEC_PATH]
@@ -7,16 +8,15 @@ Search: ripgrep (fast)
 Mode: Full file lists (use --truncate to limit)
 Filter: Unused endpoints only
 
-Endpoint         Methods  Status    Count  Files
-/api/users/{id}  PUT      ✗ UNUSED  0      -
-/api/products    GET      ✗ UNUSED  0      -
+Endpoint       Methods  Status    Count  Files
+/api/products  GET      ✗ UNUSED  0      -
 
 Summary:
   Total endpoints: 5
-  Used: 3
-  Unused: 2
-  Coverage: 60.0%
-  Total file references: 5
+  Used: 4
+  Unused: 1
+  Coverage: 80.0%
+  Total file references: 4
 
 Detailed File References (for endpoints with 2+ usages):
   No unused endpoints have multiple file references.

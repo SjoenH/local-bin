@@ -199,7 +199,8 @@ run_test() {
     local expected_files=""
 
     if [ -f "$config_file" ] && command -v jq >/dev/null 2>&1; then
-        args=$(jq -r '.args[]' "$config_file" 2>/dev/null | tr '\n' ' ' || echo "")
+        # Parse args as space-separated string
+        args=$(jq -r '.args | join(" ")' "$config_file" 2>/dev/null || echo "")
         expected_exit_code=$(jq -r '.expected_exit_code // 0' "$config_file" 2>/dev/null || echo "0")
         expected_files=$(jq -r '.expected_files | keys[]' "$config_file" 2>/dev/null || echo "")
     fi
@@ -227,7 +228,7 @@ run_test() {
     # Use /usr/bin/time to capture memory usage if available
     if false && command -v /usr/bin/time >/dev/null 2>&1; then
         # Capture both stdout and stderr from time
-        time_output=$(/usr/bin/time -l "$EPCHECK_PATH" "$args" 2>&1)
+        time_output=$(eval "/usr/bin/time -l '$EPCHECK_PATH' $args" 2>&1)
         exit_code=$?
 
         # Extract the program's stdout (everything before time statistics)
@@ -239,7 +240,7 @@ run_test() {
         # Extract time statistics (not currently used)
         # time_content=$(echo "$time_output" | grep -A 20 "maximum resident set size")
     else
-        output_content=$("$EPCHECK_PATH" "$args" 2>&1 | grep -v "Using npx")
+        output_content=$(eval "'$EPCHECK_PATH' $args" 2>&1 | grep -v "Using npx" | grep -v "DEBUG:")
         exit_code=$?
         memory_bytes=0
     fi
