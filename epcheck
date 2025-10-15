@@ -1,0 +1,651 @@
+#!/bin/bash
+# Script to check which OpenAPI endpoints are used in the codebase and where
+# Usage: bash scripts/check-endpoint-usage.sh [OPTIONS]
+
+set -e
+
+# Default values
+DEFAULT_API_SPEC="app/api/backend.d.ts"
+DEFAULT_CODE_DIR="app/"
+DEFAULT_EXCLUDE_FILE="backend.d.ts"
+DEFAULT_OUTPUT_FORMAT="table"
+
+# Check for faster tools
+HAS_RG=$(command -v rg >/dev/null 2>&1 && echo true || echo false)
+HAS_FZF=$(command -v fzf >/dev/null 2>&1 && echo true || echo false)
+HAS_FD=$(command -v fd >/dev/null 2>&1 && echo true || echo false)
+
+# Function to show usage
+show_usage() {
+  cat << EOF
+Usage: $0 [OPTIONS]
+
+OPTIONS:
+  -s, --spec FILE       Path to OpenAPI spec file (default: $DEFAULT_API_SPEC)
+  -d, --dir DIR         Directory to search for endpoint usage (default: $DEFAULT_CODE_DIR)
+  -e, --exclude FILE    File to exclude from search (default: $DEFAULT_EXCLUDE_FILE)
+  -f, --format FORMAT   Output format: table, csv, json (default: $DEFAULT_OUTPUT_FORMAT)
+  -p, --pattern REGEX   Filter endpoints by regex pattern
+  -u, --unused-only     Show only unused endpoints
+  -v, --verbose         Show detailed file information for all endpoints
+  -i, --interactive     Use fzf for interactive endpoint selection
+  -q, --quick           Skip detailed analysis for faster results
+  -t, --truncate        Truncate long file lists (show first file + count)
+  --no-colors          Disable colored output
+  -h, --help           Show this help message
+
+PERFORMANCE NOTES:
+  • Uses ripgrep (rg) if available for faster searching
+  • Uses fd for faster file discovery
+  • --quick mode skips file counting for speed
+  • --interactive mode requires fzf for endpoint filtering
+  • Default shows all files; use --truncate to limit display
+
+EXAMPLES:
+  $0                                           # Use default settings (show all files)
+  $0 -s api/openapi.ts -d src/                # Custom spec file and search directory
+  $0 --pattern "Saker.*Drivere"               # Show only endpoints matching pattern
+  $0 --unused-only                            # Show only unused endpoints
+  $0 --format csv                             # Output in CSV format
+  $0 -v                                       # Verbose output with all file details
+  $0 -i                                       # Interactive mode with fzf
+  $0 -q                                       # Quick mode for faster results
+  $0 --truncate                               # Truncate long file lists for compact view
+  $0 --no-colors                              # Plain output without colors
+
+EOF
+}
+
+# Parse command line arguments
+API_SPEC=""
+CODE_DIR=""
+EXCLUDE_FILE=""
+OUTPUT_FORMAT=""
+ENDPOINT_PATTERN=""
+UNUSED_ONLY=false
+VERBOSE=false
+INTERACTIVE=false
+QUICK_MODE=false
+NO_COLORS=false
+TRUNCATE_FILES=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -s|--spec)
+      API_SPEC="$2"
+      shift 2
+      ;;
+    -d|--dir)
+      CODE_DIR="$2"
+      shift 2
+      ;;
+    -e|--exclude)
+      EXCLUDE_FILE="$2"
+      shift 2
+      ;;
+    -f|--format)
+      OUTPUT_FORMAT="$2"
+      shift 2
+      ;;
+    -p|--pattern)
+      ENDPOINT_PATTERN="$2"
+      shift 2
+      ;;
+    -u|--unused-only)
+      UNUSED_ONLY=true
+      shift
+      ;;
+    -v|--verbose)
+      VERBOSE=true
+      shift
+      ;;
+    -i|--interactive)
+      INTERACTIVE=true
+      shift
+      ;;
+    -q|--quick)
+      QUICK_MODE=true
+      shift
+      ;;
+    -t|--truncate)
+      TRUNCATE_FILES=true
+      shift
+      ;;
+    --no-colors)
+      NO_COLORS=true
+      shift
+      ;;
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Formatting options
+if [ "$NO_COLORS" = true ]; then
+  GREEN=''
+  RED=''
+  YELLOW=''
+  BLUE=''
+  NC=''
+  BOLD=''
+  DIM=''
+  RESET=''
+else
+  GREEN='\033[0;32m'
+  RED='\033[0;31m'
+  YELLOW='\033[0;33m'
+  BLUE='\033[0;34m'
+  NC='\033[0m' # No Color
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  RESET='\033[0m'
+fi
+
+# Get the directory of this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+
+# Set defaults if not provided via command line
+API_SPEC="${API_SPEC:-$PROJECT_ROOT/$DEFAULT_API_SPEC}"
+CODE_DIR="${CODE_DIR:-$PROJECT_ROOT/$DEFAULT_CODE_DIR}"
+EXCLUDE_FILE="${EXCLUDE_FILE:-$DEFAULT_EXCLUDE_FILE}"
+OUTPUT_FORMAT="${OUTPUT_FORMAT:-$DEFAULT_OUTPUT_FORMAT}"
+
+# Validate output format
+case "$OUTPUT_FORMAT" in
+  table|csv|json)
+    ;;
+  *)
+    echo "Error: Invalid output format '$OUTPUT_FORMAT'. Use table, csv, or json." >&2
+    exit 1
+    ;;
+esac
+
+# Check for interactive mode requirements
+if [ "$INTERACTIVE" = true ] && [ "$HAS_FZF" = false ]; then
+  echo "Error: Interactive mode requires fzf. Install with 'brew install fzf' or remove -i/--interactive flag." >&2
+  exit 1
+fi
+
+# Validate inputs
+if [ ! -f "$API_SPEC" ]; then
+  echo "Error: API spec file not found: $API_SPEC" >&2
+  echo "Use -s/--spec to specify a different file or -h/--help for usage." >&2
+  exit 1
+fi
+
+if [ ! -d "$CODE_DIR" ]; then
+  echo "Error: Code directory not found: $CODE_DIR" >&2
+  echo "Use -d/--dir to specify a different directory or -h/--help for usage." >&2
+  exit 1
+fi
+
+# Convert to absolute paths
+API_SPEC="$(realpath "$API_SPEC")"
+CODE_DIR="$(realpath "$CODE_DIR")"
+
+# Extract endpoint paths from backend.d.ts
+all_endpoints=$(grep -oP '^\s*"\K/api[^" ]+' "$API_SPEC")
+
+# Interactive mode with fzf
+if [ "$INTERACTIVE" = true ]; then
+  printf "${BOLD}${YELLOW}Interactive Endpoint Selection${NC}\n"
+  printf "${DIM}Use fzf to select endpoints to analyze (multi-select with Tab)${NC}\n\n"
+  
+  selected_endpoints=$(echo "$all_endpoints" | fzf --multi --prompt="Select endpoints: " --header="Tab to select multiple, Enter to confirm")
+  
+  if [ -z "$selected_endpoints" ]; then
+    echo "No endpoints selected. Exiting."
+    exit 0
+  fi
+  
+  endpoints="$selected_endpoints"
+elif [ -n "$ENDPOINT_PATTERN" ]; then
+  # Filter endpoints by pattern if specified
+  endpoints=$(echo "$all_endpoints" | grep -E "$ENDPOINT_PATTERN" || true)
+  if [ -z "$endpoints" ]; then
+    echo "No endpoints match the pattern: $ENDPOINT_PATTERN" >&2
+    exit 1
+  fi
+else
+  endpoints="$all_endpoints"
+fi
+
+# Fast search function using ripgrep or grep
+fast_search() {
+  local endpoint="$1"
+  local search_dir="$2"
+  local exclude_file="$3"
+  local api_spec_file="$4"
+  
+  # Get just the filename from the API spec path for exclusion
+  local api_spec_basename=$(basename "$api_spec_file")
+  
+  if [ "$HAS_RG" = true ]; then
+    # Use ripgrep for much faster searching
+    rg --files-with-matches --no-heading --no-line-number \
+       --glob "!$exclude_file" --glob "!$api_spec_basename" \
+       --fixed-strings "\"$endpoint\"" "$search_dir" 2>/dev/null || true
+  else
+    # Fallback to grep - exclude both files
+    grep -r --exclude="$exclude_file" --exclude="$api_spec_basename" \
+         --files-with-matches --fixed-strings "\"$endpoint\"" "$search_dir" 2>/dev/null || true
+  fi
+}
+
+# Fast file count function
+fast_count_files() {
+  local files="$1"
+  
+  if [ "$QUICK_MODE" = true ]; then
+    # In quick mode, just check if any files exist
+    if [ -n "$files" ]; then
+      echo "1+"
+    else
+      echo "0"
+    fi
+  else
+    # Normal mode, count actual files
+    if [ -n "$files" ]; then
+      echo "$files" | wc -l
+    else
+      echo "0"
+    fi
+  fi
+}
+
+# Function to format file references
+format_file_list() {
+  local files="$1"
+  local count="$2"
+  local format="$3"
+  
+  if [ "$count" = "0" ]; then
+    echo "-"
+    return
+  fi
+  
+  # Handle quick mode
+  if [ "$count" = "1+" ]; then
+    if [ "$format" = "table" ]; then
+      # In table format, show first file with indicator
+      first_file=$(echo "$files" | head -1)
+      rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$first_file" 2>/dev/null || echo "$first_file")
+      clean_path=${rel_path#app/}
+      echo "$clean_path (quick mode)"
+    else
+      # For CSV/JSON, just indicate files exist
+      echo "files_exist"
+    fi
+    return
+  fi
+  
+  # Process files into a cleaned list
+  local clean_files=""
+  while IFS= read -r file; do
+    if [ -n "$file" ]; then
+      rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+      clean_path=${rel_path#app/}
+      if [ -z "$clean_files" ]; then
+        clean_files="$clean_path"
+      else
+        clean_files="$clean_files"$'\n'"$clean_path"
+      fi
+    fi
+  done <<< "$files"
+  
+  # Count actual clean files
+  local actual_count=$(echo "$clean_files" | wc -l)
+  if [ -z "$clean_files" ]; then
+    actual_count=0
+  fi
+  
+  case "$format" in
+    "csv"|"json")
+      # For structured formats, join with semicolon
+      echo "$clean_files" | tr '\n' ';' | sed 's/;$//'
+      ;;
+    *)
+      # For table format - show all files by default
+      if [ "$actual_count" -eq 1 ]; then
+        echo "$clean_files"
+      elif [ "$TRUNCATE_FILES" = true ] && [ "$actual_count" -gt 3 ] && [ "$VERBOSE" != true ]; then
+        # Only truncate if explicitly requested and not in verbose mode
+        first_clean=$(echo "$clean_files" | head -1)
+        echo "$first_clean, ... (+$((actual_count-1)) more)"
+      else
+        # Show all files separated by commas
+        echo "$clean_files" | tr '\n' ',' | sed 's/,/, /g' | sed 's/, $//'
+      fi
+      ;;
+  esac
+}
+
+# Function to output in CSV format
+output_csv() {
+  echo "Endpoint,Status,Count,Files"
+  
+  for endpoint in $endpoints; do
+    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+    
+    if [ -n "$files" ]; then
+      status="USED"
+      count=$(fast_count_files "$files")
+      files_formatted=$(format_file_list "$files" "$count" "csv")
+    else
+      status="UNUSED"
+      count=0
+      files_formatted="-"
+    fi
+    
+    # Skip if unused-only filter is set and endpoint is used
+    if [ "$UNUSED_ONLY" = true ] && [ "$status" = "USED" ]; then
+      continue
+    fi
+    
+    echo "\"$endpoint\",\"$status\",$count,\"$files_formatted\""
+  done
+}
+
+# Function to output in JSON format
+output_json() {
+  echo "{"
+  echo "  \"report\": {"
+  echo "    \"generated\": \"$(date -Iseconds)\","
+  echo "    \"api_spec\": \"$(realpath --relative-to="$PROJECT_ROOT" "$API_SPEC")\","
+  echo "    \"search_dir\": \"$(realpath --relative-to="$PROJECT_ROOT" "$CODE_DIR")\","
+  echo "    \"exclude_file\": \"$EXCLUDE_FILE\","
+  echo "    \"tools\": {"
+  echo "      \"ripgrep\": $HAS_RG,"
+  echo "      \"fzf\": $HAS_FZF,"
+  echo "      \"fd\": $HAS_FD"
+  echo "    },"
+  echo "    \"mode\": {"
+  echo "      \"quick\": $QUICK_MODE,"
+  echo "      \"interactive\": $INTERACTIVE,"
+  echo "      \"verbose\": $VERBOSE"
+  echo "    }"
+  echo "  },"
+  echo "  \"endpoints\": ["
+  
+  local first=true
+  for endpoint in $endpoints; do
+    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+    
+    if [ -n "$files" ]; then
+      status="used"
+      count=$(fast_count_files "$files")
+      files_formatted=$(format_file_list "$files" "$count" "json")
+    else
+      status="unused"
+      count=0
+      files_formatted=""
+    fi
+    
+    # Skip if unused-only filter is set and endpoint is used
+    if [ "$UNUSED_ONLY" = true ] && [ "$status" = "used" ]; then
+      continue
+    fi
+    
+    if [ "$first" = false ]; then
+      echo ","
+    fi
+    first=false
+    
+    echo "    {"
+    echo "      \"endpoint\": \"$endpoint\","
+    echo "      \"status\": \"$status\","
+    if [ "$QUICK_MODE" = true ] && [ "$count" != "0" ]; then
+      echo "      \"count\": \"$count\","
+    else
+      echo "      \"count\": $count,"
+    fi
+    if [ "$count" != "0" ] && [ -n "$files_formatted" ]; then
+      echo "      \"files\": ["
+      IFS=';' read -r -a files_array <<< "$files_formatted"
+      for i in "${!files_array[@]}"; do
+        if [ $i -gt 0 ]; then echo ","; fi
+        echo -n "        \"${files_array[i]}\""
+      done
+      echo ""
+      echo "      ]"
+    else
+      echo "      \"files\": []"
+    fi
+    echo -n "    }"
+  done
+  
+  echo ""
+  echo "  ]"
+  echo "}"
+}
+
+# Handle different output formats
+case "$OUTPUT_FORMAT" in
+  "csv")
+    output_csv
+    exit 0
+    ;;
+  "json")
+    output_json
+    exit 0
+    ;;
+  "table")
+    # Continue with table format below
+    ;;
+esac
+
+# Table format output
+# Print table header with better formatting
+printf "\n${BOLD}${YELLOW}OpenAPI Endpoint Usage Report${NC}\n"
+printf "${DIM}Generated on $(date)${NC}\n"
+printf "${DIM}API Spec: %s${NC}\n" "$(realpath --relative-to="$PROJECT_ROOT" "$API_SPEC")"
+printf "${DIM}Search Dir: %s${NC}\n" "$(realpath --relative-to="$PROJECT_ROOT" "$CODE_DIR")"
+printf "${DIM}Excluding: %s, %s${NC}\n" "$EXCLUDE_FILE" "$(basename "$API_SPEC")"
+if [ "$HAS_RG" = true ]; then
+  printf "${DIM}Search: ripgrep (fast)${NC}\n"
+else
+  printf "${DIM}Search: grep (standard)${NC}\n"
+fi
+if [ "$QUICK_MODE" = true ]; then
+  printf "${DIM}Mode: Quick (counts may show 1+ for used endpoints)${NC}\n"
+fi
+if [ "$TRUNCATE_FILES" = true ]; then
+  printf "${DIM}Mode: Truncated file lists${NC}\n"
+else
+  printf "${DIM}Mode: Full file lists (use --truncate to limit)${NC}\n"
+fi
+if [ -n "$ENDPOINT_PATTERN" ]; then
+  printf "${DIM}Pattern: %s${NC}\n" "$ENDPOINT_PATTERN"
+fi
+if [ "$UNUSED_ONLY" = true ]; then
+  printf "${DIM}Filter: Unused endpoints only${NC}\n"
+fi
+if [ "$INTERACTIVE" = true ]; then
+  printf "${DIM}Mode: Interactive (fzf selected)${NC}\n"
+fi
+printf "\n"
+
+# Prepare table data
+table_data=""
+table_data+="Endpoint|Status|Count|Files\n"
+
+# Collect data and build table rows
+for endpoint in $endpoints; do
+  # Find all files where the endpoint is used (excluding specified file and API spec)
+  files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+  
+  if [ -n "$files" ]; then
+    status="${GREEN}✓ USED${NC}"
+    # Count files
+    count=$(fast_count_files "$files")
+    files_formatted=$(format_file_list "$files" "$count" "table")
+  else
+    status="${RED}✗ UNUSED${NC}"
+    count=0
+    files_formatted="-"
+  fi
+  
+  # Skip if unused-only filter is set and endpoint is used
+  if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+    continue
+  fi
+  
+  # Add row to table data
+  table_data+="$endpoint|$status|$count|${BLUE}$files_formatted${NC}\n"
+done
+
+# Print the table using column for proper alignment
+printf "%b" "$table_data" | column -t -s '|'
+
+# Summary statistics
+used_endpoints=0
+unused_endpoints=0
+total_files=0
+
+# Count usage statistics
+for endpoint in $endpoints; do
+  files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+  if [ -n "$files" ]; then
+    ((used_endpoints++))
+    if [ "$QUICK_MODE" = false ]; then
+      file_count=$(echo "$files" | wc -l)
+      total_files=$((total_files + file_count))
+    fi
+  else
+    ((unused_endpoints++))
+  fi
+done
+
+total_endpoints=$((used_endpoints + unused_endpoints))
+
+printf "\n${BOLD}Summary:${NC}\n"
+printf "  Total endpoints: %d\n" "$total_endpoints"
+printf "  ${GREEN}Used: %d${NC}\n" "$used_endpoints"
+printf "  ${RED}Unused: %d${NC}\n" "$unused_endpoints"
+if command -v bc >/dev/null 2>&1; then
+  coverage=$(echo "scale=1; $used_endpoints * 100 / $total_endpoints" | bc -l 2>/dev/null || echo "0.0")
+  printf "  Coverage: %s%%\n" "$coverage"
+else
+  printf "  Coverage: %d%%\n" $(( used_endpoints * 100 / total_endpoints ))
+fi
+if [ "$QUICK_MODE" = false ]; then
+  printf "  Total file references: %d\n" "$total_files"
+fi
+
+# Show detailed file listings for endpoints with multiple references
+if [ "$VERBOSE" = true ]; then
+  printf "\n${BOLD}Detailed File References:${NC}\n"
+  detailed_shown=false
+  for endpoint in $endpoints; do
+    files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+    if [ -n "$files" ]; then
+      count=$(fast_count_files "$files")
+      
+      # Skip if unused-only filter is set and endpoint is used
+      if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+        continue
+      fi
+      
+      if [ "$count" != "0" ]; then
+        detailed_shown=true
+        if [ "$QUICK_MODE" = true ]; then
+          printf "\n${YELLOW}%s${NC} (files found):\n" "$endpoint"
+        else
+          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
+        fi
+        echo "$files" | while read -r file; do
+          if [ -n "$file" ]; then
+            rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+            clean_path=${rel_path#app/}
+            printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+          fi
+        done
+      fi
+    fi
+  done
+  
+  if [ "$detailed_shown" = false ]; then
+    printf "  ${DIM}No matching endpoints found.${NC}\n"
+  fi
+elif [ "$QUICK_MODE" = false ]; then
+  if [ "$TRUNCATE_FILES" = true ]; then
+    printf "\n${BOLD}Detailed File References (for endpoints with 3+ usages):${NC}\n"
+    detailed_shown=false
+    for endpoint in $endpoints; do
+      files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+      if [ -n "$files" ]; then
+        count=$(fast_count_files "$files")
+        
+        # Skip if unused-only filter is set and endpoint is used
+        if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+          continue
+        fi
+        
+        if [ "$count" -ge 3 ]; then
+          detailed_shown=true
+          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
+          echo "$files" | while read -r file; do
+            if [ -n "$file" ]; then
+              rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+              clean_path=${rel_path#app/}
+              printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+            fi
+          done
+        fi
+      fi
+    done
+
+    if [ "$detailed_shown" = false ]; then
+      if [ "$UNUSED_ONLY" = true ]; then
+        printf "  ${DIM}No unused endpoints have multiple file references.${NC}\n"
+      else
+        printf "  ${DIM}No endpoints with 3 or more file references found.${NC}\n"
+      fi
+    fi
+  else
+    printf "\n${BOLD}Detailed File References (for endpoints with 2+ usages):${NC}\n"
+    detailed_shown=false
+    for endpoint in $endpoints; do
+      files=$(fast_search "$endpoint" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+      if [ -n "$files" ]; then
+        count=$(fast_count_files "$files")
+        
+        # Skip if unused-only filter is set and endpoint is used
+        if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
+          continue
+        fi
+        
+        if [ "$count" -ge 2 ] && [ "$count" != "1+" ]; then
+          detailed_shown=true
+          printf "\n${YELLOW}%s${NC} (%s files):\n" "$endpoint" "$count"
+          echo "$files" | while read -r file; do
+            if [ -n "$file" ]; then
+              rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$file" 2>/dev/null || echo "$file")
+              clean_path=${rel_path#app/}
+              printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+            fi
+          done
+        fi
+      fi
+    done
+
+    if [ "$detailed_shown" = false ]; then
+      if [ "$UNUSED_ONLY" = true ]; then
+        printf "  ${DIM}No unused endpoints have multiple file references.${NC}\n"
+      else
+        printf "  ${DIM}No endpoints with 2 or more file references found.${NC}\n"
+      fi
+    fi
+  fi
+fi
+
+printf "\n${DIM}Note: This script searches for exact string matches of endpoint paths in quotes.${NC}\n"
+printf "${DIM}      The API spec file is automatically excluded from the search results.${NC}\n"
