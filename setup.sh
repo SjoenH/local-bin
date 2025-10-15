@@ -99,7 +99,7 @@ main() {
     if [ "$HAS_RUST" = true ]; then
         print_header "Building Rust Binaries"
 
-        RUST_PROJECTS=("epcheck" "usersecrets" "lspkg")
+        RUST_PROJECTS=("epcheck-src" "usersecrets-src" "lspkg-src")
         for project in "${RUST_PROJECTS[@]}"; do
             if [ -d "$project" ]; then
                 print_info "Building $project (this may take a moment)..."
@@ -134,7 +134,7 @@ main() {
     done
 
     # Special handling for Rust binary symlinks
-    RUST_TOOLS=("epcheck:epcheck" "usersecrets:usersecrets" "lspkg:lspkg")
+    RUST_TOOLS=("epcheck:epcheck-src" "usersecrets:usersecrets-src" "lspkg:lspkg-src")
     for tool_info in "${RUST_TOOLS[@]}"; do
         tool_name="${tool_info%%:*}"
         project_dir="${tool_info##*:}"
