@@ -1,29 +1,99 @@
-Here is a high-quality README for the `bin` project:
-```markdown
-# bin Project
-=====================
+# local-bin
 
-A collection of command-line utilities to aid development and maintenance tasks.
+A collection of personal command-line utilities designed to streamline common development and maintenance tasks. These scripts are intended for use in Linux or macOS environments.
 
-## Table of Contents
+## Installation
 
-* [Introduction](#introduction)
-* [Scripts](#scripts)
-	+ [ai_story](#ai_story)
-	+ [ai_readme](#ai_readme)
-	+ [depcheck](#depcheck)
-	+ [gcm](#gcm)
-	+ [labelai](#labelai)
-	+ [lspkg](#lspkg)
-	+ [usersecrets](#usersecrets)
+### Prerequisites
 
-## Introduction
+Before installing these scripts, ensure you have the following dependencies installed:
+- `bash` (usually pre-installed on Mac/Linux)
+- `gh` (GitHub CLI) - for scripts that interact with GitHub
+- `ollama` - for AI-powered scripts (ai-story, ai_readme, gcm, labelai)
+- `fd` - for scripts that search files (lspkg, usersecrets)
+- `jq` - for JSON parsing (lspkg, depcheck)
 
-The `bin` project contains a set of command-line scripts designed to simplify various development and maintenance tasks. These utilities are intended for use in a Linux or macOS environment.
+### Installation Steps
+
+1.  **Clone the repository** to a local directory. We recommend using `~/bin` or `~/.local/bin`:
+
+    ```bash
+    # Option 1: Clone to ~/bin
+    git clone https://github.com/SjoenH/local-bin.git ~/bin
+
+    # Option 2: Clone to ~/.local/bin
+    git clone https://github.com/SjoenH/local-bin.git ~/.local/bin
+    ```
+
+2.  **Make the scripts executable** (if not already):
+
+    ```bash
+    # For ~/bin
+    chmod +x ~/bin/*
+
+    # For ~/.local/bin
+    chmod +x ~/.local/bin/*
+    ```
+
+3.  **Add the directory to your PATH**:
+
+    For **Bash** users, add this line to your `~/.bashrc` or `~/.bash_profile`:
+    ```bash
+    # For ~/bin
+    export PATH="$HOME/bin:$PATH"
+
+    # For ~/.local/bin
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+
+    For **Zsh** users (default on macOS), add this line to your `~/.zshrc`:
+    ```bash
+    # For ~/bin
+    export PATH="$HOME/bin:$PATH"
+
+    # For ~/.local/bin
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+
+4.  **Reload your shell configuration**:
+
+    ```bash
+    # For Bash
+    source ~/.bashrc  # or source ~/.bash_profile
+
+    # For Zsh
+    source ~/.zshrc
+    ```
+
+5.  **Verify the installation**:
+
+    ```bash
+    # Test that the scripts are in your PATH
+    which ai-story
+    which lspkg
+
+    # Try running a script (this will show the help message)
+    ai-story help
+    ```
+
+### Alternative Installation
+
+If you prefer to keep the repository elsewhere, you can create symbolic links:
+
+```bash
+# Clone to any location
+git clone https://github.com/SjoenH/local-bin.git ~/projects/local-bin
+
+# Create symbolic links to a directory in your PATH
+mkdir -p ~/.local/bin
+ln -s ~/projects/local-bin/* ~/.local/bin/
+
+# Make sure ~/.local/bin is in your PATH (see step 3 above)
+```
 
 ## Scripts
 
-### ai_story
+### ai\_story
 -----------------
 
 A Bash script that generates a prompt based on the specified issue or pull request number, uses an LLaMA model to generate suggestions, and displays these suggestions along with the issue title and number.
@@ -33,7 +103,7 @@ Usage:
 ./ai_story --issue <number> | --pr <number>
 ```
 
-### ai_readme
+### ai\_readme
 ----------------
 
 A script that generates a README file for a project by collecting descriptions of each file in the project directory and combining them into a single content string. The output can be saved as a Markdown file (`README.md`).
@@ -95,6 +165,6 @@ Usage:
 
 ## Conclusion
 
-The `bin` project provides a set of command-line utilities designed to streamline various development and maintenance tasks. By utilizing these scripts, developers can simplify their workflow, improve productivity, and focus on the core aspects of their projects.
+This `local-bin` collection simplifies your development and maintenance workflow, boosting productivity by automating common tasks.
 
-Note: This README assumes that all scripts are installed in the same directory as this file. If you're using an IDE or package manager like Homebrew (macOS) or apt-get (Ubuntu-based Linux), you may need to adjust the installation process accordingly.
+For setup, refer to the [Installation](#installation) section.
