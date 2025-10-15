@@ -27,7 +27,16 @@ Before installing these scripts, ensure you have the following dependencies inst
     git clone https://github.com/SjoenH/local-bin.git ~/.local/bin
     ```
 
-2.  **Make the scripts executable** (if not already):
+2.  **Build the Rust binaries** (required for epcheck):
+
+    ```bash
+    # Build the optimized epcheck binary
+    cd epcheck-rust
+    cargo build --release
+    cd ..
+    ```
+
+3.  **Make the scripts executable** (if not already):
 
     ```bash
     # For ~/bin
@@ -37,7 +46,7 @@ Before installing these scripts, ensure you have the following dependencies inst
     chmod +x ~/.local/bin/*
     ```
 
-3.  **Add the directory to your PATH**:
+4.  **Add the directory to your PATH**:
 
     For **Bash** users, add this line to your `~/.bashrc` or `~/.bash_profile`:
     ```bash
@@ -57,7 +66,7 @@ Before installing these scripts, ensure you have the following dependencies inst
     export PATH="$HOME/.local/bin:$PATH"
     ```
 
-4.  **Reload your shell configuration**:
+5.  **Reload your shell configuration**:
 
     ```bash
     # For Bash
@@ -67,7 +76,7 @@ Before installing these scripts, ensure you have the following dependencies inst
     source ~/.zshrc
     ```
 
-5.  **Verify the installation**:
+6.  **Verify the installation**:
 
     ```bash
     # Test that the scripts are in your PATH
@@ -93,11 +102,16 @@ If you prefer to keep the repository elsewhere, you can create symbolic links:
 # Clone to any location
 git clone https://github.com/SjoenH/local-bin.git ~/projects/local-bin
 
+# Build the Rust binaries
+cd ~/projects/local-bin/epcheck-rust
+cargo build --release
+cd ..
+
 # Create symbolic links to a directory in your PATH
 mkdir -p ~/.local/bin
 ln -s ~/projects/local-bin/* ~/.local/bin/
 
-# Make sure ~/.local/bin is in your PATH (see step 3 above)
+# Make sure ~/.local/bin is in your PATH (see step 4 above)
 ```
 
 ## Scripts
@@ -137,7 +151,9 @@ Usage:
 
 A high-performance tool that checks which OpenAPI endpoints are used in the codebase and where they are referenced. It analyzes your project to show endpoint usage statistics, helping identify unused API endpoints and track endpoint adoption across your codebase.
 
-**Note:** `epcheck` is now implemented in Rust for significantly better performance. The original Bash version is available as `epcheck-bash`.
+**Note:** `epcheck` is now implemented in Rust for significantly better performance. The original Bash version is available as `epcheck-bash` for compatibility or when Rust is not available.
+
+**Installation Note:** The Rust version requires compilation (see installation steps below). However, pre-compiled binaries are included in this repository for convenience. If you prefer not to install Rust, you can use `epcheck-bash` which has the same interface but slower performance.
 
 #### Features:
 - **High-performance Rust implementation** with async processing
