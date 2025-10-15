@@ -1,0 +1,44 @@
+#!/bin/bash
+
+currentDir=$(pwd)
+STAGED_FILES=$(git diff --staged --name-only)
+
+if [ -z "$STAGED_FILES" ]; then
+  echo "No files to lint"
+  sleep 1
+  exit 0
+fi
+
+echo "Linting the following files:"
+echo "$STAGED_FILES"
+
+for FILE in $STAGED_FILES; do
+  echo "Processing $FILE"
+
+  # Change directory to the file's directory
+  cd $(dirname $FILE)
+
+  echo "Running eslint"
+  npx eslint $(basename $FILE) --fix
+
+  if [ $? -ne 0 ]; then
+    echo "Linting failed. Please fix the errors and try again."
+    exit 1
+  fi
+
+  echo "Running prettier"
+  npx prettier "$(basename $FILE)" --write
+
+  if [ $? -ne 0 ]; then
+    echo "Prettier failed. Please fix the errors and try again."
+    exit 1
+  fi
+
+  # Stage the fixed file
+  git add "$FILE"
+
+  cd "$currentDir"
+done
+
+echo "Linting and prettier passed. Ready to commit."
+sleep 1

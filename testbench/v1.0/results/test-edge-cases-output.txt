@@ -1,6 +1,7 @@
+Using npx openapi-typescript to parse OpenAPI spec
 
 OpenAPI Endpoint Usage Report
-Generated on Wed Oct 15 17:50:53 CEST 2025
+Generated on Wed Oct 15 17:57:22 CEST 2025
 API Spec: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases/no-usage-spec.json
 Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases/src
 Excluding: no-usage-spec.json
@@ -25,3 +26,21 @@ Note: This script searches for endpoint usage in multiple patterns:
       2. Method calls: .GET(""), .POST(""), etc.
       3. Path parameters: {id} matches actual values like 123, abc, etc.
       The API spec file is automatically excluded from the search results.
+        1.87 real         1.25 user         0.34 sys
+           161792000  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               38940  page reclaims
+                  72  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  24  messages sent
+                  44  messages received
+                  18  signals received
+                 143  voluntary context switches
+                9992  involuntary context switches
+            55426582  instructions retired
+            31201779  cycles elapsed
+             2573184  peak memory footprint

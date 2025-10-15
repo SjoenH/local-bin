@@ -1,3 +1,5 @@
+No OpenAPI spec provided, searching for common spec files...
+Found OpenAPI spec: ./openapi.json
 
 OpenAPI Endpoint Usage Report
 Generated on [DATE]
@@ -8,9 +10,9 @@ Search: ripgrep (fast)
 Mode: Full file lists (use --truncate to limit)
 
 Endpoint         Methods  Status    Count     Files
-/api/users       GET      ✓ USED           2  traditionalCalls.ts, userService.ts
-/api/users       POST     ✓ USED           2  traditionalCalls.ts, userService.ts
-/api/users/{id}  GET      ✓ USED           1  userService.ts
+userService.ts
+userService.ts
+userService.ts
 /api/users/{id}  PUT      ✗ UNUSED  0         -
 /api/products    GET      ✗ UNUSED  0         -
 

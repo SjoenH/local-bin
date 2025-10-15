@@ -183,8 +183,8 @@ run_test() {
             local normalized_output="$output_file.normalized"
             local normalized_expected="$expected_file.normalized"
 
-            # Normalize actual output (remove time statistics at end)
-            sed 's/Generated on.*/Generated on [DATE]/g; s|API Spec: .*/test-[^/]*/|API Spec: [SPEC_PATH]|g; s|Search Dir: .*/test-[^/]*/|Search Dir: [DIR_PATH]|g; /^[[:space:]]*[0-9]/,$d' "$output_file" > "$normalized_output"
+             # Normalize actual output (remove time statistics at end)
+             sed 's/Generated on.*/Generated on [DATE]/g; s|API Spec: .*/test-[^/]*/[^ ]*|API Spec: [SPEC_PATH]|g; s|Search Dir: .*/test-[^/]*/[^ ]*|Search Dir: [DIR_PATH]|g; s|.*/testbench/v1.0/test-basic/src/||g; /DEBUG/d; /^[[:space:]]*[0-9][0-9]*\.[0-9]/,$d' "$output_file" > "$normalized_output"
 
             # Normalize expected output (should already be normalized)
             cp "$expected_file" "$normalized_expected"

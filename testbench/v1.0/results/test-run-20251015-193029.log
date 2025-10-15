@@ -1,0 +1,19 @@
+2025-10-15 19:30:29 Starting epcheck testbench v1.0
+2025-10-15 19:30:29 Results will be saved to: /Users/henry/.local/bin/testbench/v1.0/results
+2025-10-15 19:30:29 Log file: /Users/henry/.local/bin/testbench/v1.0/results/test-run-20251015-193029.log
+2025-10-15 19:30:29 =========================================
+2025-10-15 19:30:29 🔍 Discovering test cases...
+2025-10-15 19:30:29 📋 Found 5 test cases
+2025-10-15 19:30:29 
+2025-10-15 19:30:29 🧪 Running test: test-basic
+2025-10-15 19:30:29 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-basic
+2025-10-15 19:30:29 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.json -d src --no-colors 
+2025-10-15 19:30:32 ⏱️  Execution time: 3.00s | 🧠 Memory: 151MB
+2025-10-15 19:30:32 🔍 Validating table output...
+2025-10-15 19:30:32 ❌ table output validation failed
+2025-10-15 19:30:32 Differences found. Run: diff '/Users/henry/.local/bin/testbench/v1.0/test-basic/expected-table.txt.normalized' '/Users/henry/.local/bin/testbench/v1.0/results/test-basic-output.txt.normalized'
+2025-10-15 19:30:32 ❌ Test test-basic FAILED
+2025-10-15 19:30:32 
+2025-10-15 19:30:32 🧪 Running test: test-complex
+2025-10-15 19:30:32 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-complex
+2025-10-15 19:30:32 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.yaml -d src --no-colors 

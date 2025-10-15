@@ -210,20 +210,26 @@ find_openapi_files() {
 if [ -z "$API_SPEC" ]; then
   printf "${DIM}No OpenAPI spec provided, searching for common spec files...${NC}\n" >&2
 
-  # Search in current directory and common subdirectories
-  found_files=$(find_openapi_files ".")
-
-  if [ -z "$found_files" ]; then
-    # Try searching in common directories
-    for dir in "api" "docs" "spec" "specs" "swagger" "openapi"; do
-      if [ -d "$dir" ]; then
-        found_files="$found_files$(find_openapi_files "$dir")"$'\n'
-      fi
-    done
+  # Search in current directory and git root if applicable
+  search_dirs=(".")
+  if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    current_dir=$(pwd)
+    if [ -n "$git_root" ] && [ "$git_root" != "$current_dir" ]; then
+      search_dirs+=("$git_root")
+    fi
   fi
+
+  found_files=""
+  for search_dir in "${search_dirs[@]}"; do
+    found_files="$found_files$(find_openapi_files "$search_dir")"$'\n'
+  done
 
   # Clean up the list
   found_files=$(echo "$found_files" | sed '/^$/d' | sort | uniq)
+
+  # Sort by path depth to find closest
+  found_files=$(echo "$found_files" | awk -F'/' '{print NF-1, $0}' | sort -n | cut -d' ' -f2-)
 
   if [ -z "$found_files" ]; then
     echo "Error: No OpenAPI spec file found. Please specify one with -s/--spec." >&2
@@ -316,41 +322,32 @@ extract_with_npx() {
     if npx --yes openapi-typescript "$spec_file" --output "$temp_ts_file" >/dev/null 2>&1; then
       printf "${DIM}Using npx openapi-typescript to parse OpenAPI spec${NC}\n" >&2
       
-      # Parse the generated TypeScript file
-      awk '
-        /^    "\/api[^"]*": \{/ {
-          # Extract endpoint path (4 spaces for npx generated files)
-          if (match($0, /"\/api[^"]*"/)) {
-            endpoint = substr($0, RSTART+1, RLENGTH-2)
-            methods = ""
-            in_endpoint = 1
-          }
-          next
-        }
-
-        in_endpoint && /^    };$/ {
-          # End of endpoint block (4 spaces)
-          if (endpoint != "" && methods != "") {
-            print endpoint "|" methods
-          }
-          endpoint = ""
-          methods = ""
-          in_endpoint = 0
-          next
-        }
-
-        in_endpoint && /^        (get|post|put|delete|patch|head|options|trace): \{/ {
-          # Found HTTP method (8 spaces for npx generated files)
-          if (match($0, /(get|post|put|delete|patch|head|options|trace)/)) {
-            method = toupper(substr($0, RSTART, RLENGTH))
-            if (methods == "") {
-              methods = method
-            } else {
-              methods = methods "," method
+        # Parse the generated TypeScript file
+        awk '
+          /^    "\/api[^"]*": \{/ {
+            # Extract endpoint path (4 spaces for npx generated files)
+            if (match($0, /"\/api[^"]*"/)) {
+              endpoint = substr($0, RSTART+1, RLENGTH-2)
+              in_endpoint = 1
             }
+            next
           }
-        }
-      ' "$temp_ts_file"
+
+          in_endpoint && /^    };$/ {
+            # End of endpoint block (4 spaces)
+            endpoint = ""
+            in_endpoint = 0
+            next
+          }
+
+           in_endpoint && /^        (get|post|put|delete|patch|head|options|trace): \{/ {
+             # Found HTTP method (8 spaces for npx generated files)
+             if (match($0, /(get|post|put|delete|patch|head|options|trace)/)) {
+               method = toupper(substr($0, RSTART, RLENGTH))
+               print endpoint "|" method
+             }
+           }
+       ' "$temp_ts_file"
       
       # Clean up temp file
       rm -f "$temp_ts_file"
@@ -403,22 +400,22 @@ async function parseSpec(filePath) {
       let currentMethod = null;
       let indent = 0;
       
-      for (const line of lines) {
-        const trimmed = line.trim();
-        const leadingSpaces = line.length - line.trimStart().length;
-        
-        // Detect path
-        if (trimmed.match(/^\"?\/api[^\"]*\"?:/)) {
-          currentPath = trimmed.split(':')[0].replace(/[\"']/g, '');
-          spec.paths[currentPath] = {};
-          indent = leadingSpaces;
-        }
-        // Detect method under current path
-        else if (currentPath && leadingSpaces > indent && trimmed.match(/^(get|post|put|delete|patch|head|options|trace):/)) {
-          currentMethod = trimmed.split(':')[0];
-          spec.paths[currentPath][currentMethod] = {};
-        }
-      }
+       for (const line of lines) {
+         const trimmed = line.trim();
+         const leadingSpaces = line.length - line.trimStart().length;
+
+         // Detect path
+         if (trimmed.match(/^\"?\/api[^\"]*\"?:/)) {
+           currentPath = trimmed.split(':')[0].replace(/[\"']/g, '');
+           spec.paths[currentPath] = {};
+           indent = leadingSpaces;
+         }
+         // Detect method under current path
+         else if (currentPath && leadingSpaces > indent && trimmed.match(/^(get|post|put|delete|patch|head|options|trace):/)) {
+           currentMethod = trimmed.split(':')[0];
+           spec.paths[currentPath][currentMethod] = {};
+         }
+       }
     } else {
       console.error('Unsupported file format for Node.js parsing');
       process.exit(1);
@@ -432,16 +429,11 @@ async function parseSpec(filePath) {
     // Extract endpoints and methods
     Object.entries(spec.paths).forEach(([path, pathObj]) => {
       if (path.startsWith('/api')) {
-        const methods = [];
         ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'].forEach(method => {
           if (pathObj[method]) {
-            methods.push(method.toUpperCase());
+            console.log(\`${path}|\${method.toUpperCase()}\`);
           }
         });
-        
-        if (methods.length > 0) {
-          console.log(\`\${path}|\${methods.join(',')}\`);
-        }
       }
     });
     
@@ -486,40 +478,31 @@ detect_spec_type() {
 extract_from_typescript() {
   local spec_file="$1"
   
-  # Use the improved AWK approach for TypeScript files
-  # Note: The indentation is 4 spaces for endpoints, 8 spaces for methods
-  awk '
-    /^    "\/api[^"]*": \{/ {
-      # Extract endpoint path (4 spaces indentation)
-      match($0, /"(\/api[^"]*)"/, endpoint_match)
-      endpoint = endpoint_match[1]
-      methods = ""
-      in_endpoint = 1
-      next
-    }
-    
-    in_endpoint && /^    };$/ {
-      # End of endpoint block (4 spaces indentation)
-      if (endpoint != "" && methods != "") {
-        print endpoint "|" methods
+   # Use the improved AWK approach for TypeScript files
+   # Note: The indentation is 4 spaces for endpoints, 8 spaces for methods
+   awk '
+     /^    "\/api[^"]*": \{/ {
+       # Extract endpoint path (4 spaces indentation)
+       match($0, /"(\/api[^"]*)"/, endpoint_match)
+       endpoint = endpoint_match[1]
+       in_endpoint = 1
+       next
+     }
+
+     in_endpoint && /^    };$/ {
+       # End of endpoint block (4 spaces indentation)
+       endpoint = ""
+       in_endpoint = 0
+       next
+     }
+
+      in_endpoint && /^        (get|post|put|delete|patch|head|options|trace): \{/ {
+        # Found HTTP method (8 spaces indentation)
+        match($0, /^        (get|post|put|delete|patch|head|options|trace)/, method_match)
+        method = toupper(method_match[1])
+        print endpoint "|" method
       }
-      endpoint = ""
-      methods = ""
-      in_endpoint = 0
-      next
-    }
-    
-    in_endpoint && /^        (get|post|put|delete|patch|head|options|trace): \{/ {
-      # Found HTTP method (8 spaces indentation)
-      match($0, /^        (get|post|put|delete|patch|head|options|trace)/, method_match)
-      method = toupper(method_match[1])
-      if (methods == "") {
-        methods = method
-      } else {
-        methods = methods "," method
-      }
-    }
-  ' "$spec_file"
+   ' "$spec_file"
 }
 
 # Main function to extract endpoints and methods
@@ -625,27 +608,36 @@ fast_search() {
   local endpoint_regex=$(convert_path_to_regex "$endpoint")
 
   # Also search for the literal endpoint path (with {params})
-  local literal_endpoint=$(echo "$endpoint" | sed 's/[[\.*^$()+=!|]/\\&/g')
+  local literal_endpoint=$(echo "$endpoint" | sed 's/[[\.*^$()+=!|{}]/\\&/g')
 
-  # Search for both quoted endpoint and method patterns like .GET("/api/path")
-  local search_patterns=""
 
-  # Create regex pattern that matches various endpoint usage patterns
-  # Pattern: ("endpoint_regex"|'endpoint_regex'|"literal_endpoint"|'literal_endpoint'|\.METHOD\(...)|client\.METHOD\(...))
-  search_patterns="(\"$endpoint_regex\"|'$endpoint_regex'|\"$literal_endpoint\"|'$literal_endpoint'"
 
-  # Add method-specific patterns for each available method
-  IFS=',' read -ra method_array <<< "$methods"
-  for method in "${method_array[@]}"; do
-    search_patterns="$search_patterns|\\.$method\\(\"$endpoint_regex\"|\\.$method\\('$endpoint_regex'|\\.$method\\(\"$literal_endpoint\"|\\.$method\\('$literal_endpoint'|client\\.$method\\(\"$endpoint_regex\"|client\\.$method\\('$endpoint_regex'|client\\.$method\\(\"$literal_endpoint\"|client\\.$method\\('$literal_endpoint'"
-  done
-  search_patterns="$search_patterns)"
+   # Search for endpoint usage patterns - method-specific calls
+   local search_patterns=""
+
+   # Method call patterns (most reliable for per-method analysis)
+   IFS=',' read -ra method_array <<< "$methods"
+   for method in "${method_array[@]}"; do
+     # Match method calls like client.GET('/api/users') or api.get('/api/users')
+     upper_method="$method"
+     lower_method=$(echo "$method" | tr '[:upper:]' '[:lower:]')
+     if [ -z "$search_patterns" ]; then
+       search_patterns="$upper_method.*$literal_endpoint|$lower_method.*$literal_endpoint"
+     else
+       search_patterns="$search_patterns|$upper_method.*$literal_endpoint|$lower_method.*$literal_endpoint"
+     fi
+   done
+
+  # For single-method analysis, method-specific patterns are sufficient
+  # Literal string matches are removed to avoid false positives across methods
 
   if [ "$HAS_RG" = true ]; then
     # Use ripgrep for much faster searching
+    printf "${DIM}DEBUG: searching for pattern: %s${NC}\n" "$search_patterns" >&2
     local results=""
-    results=$(rg --files-with-matches --no-heading --no-line-number \
-       -e "$search_patterns" "$search_dir" 2>/dev/null || true)
+    # Get all matches with line numbers, filter out comments, then get unique files
+    results=$(rg -n --no-heading -e "$search_patterns" "$search_dir" 2>/dev/null | \
+      grep -v '://' | grep -v ':#' | cut -d: -f1 | sort | uniq || true)
     # Filter out the API spec file and any exclude file
     local filtered_results
     filtered_results=$(echo "$results" | grep -v "$api_spec_basename" | { [ -n "$exclude_file" ] && grep -v "$exclude_file" || cat; } || true)
@@ -713,8 +705,8 @@ format_file_list() {
   local clean_files=""
    while IFS= read -r file; do
      if [ -n "$file" ]; then
-       rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
-       clean_path=${rel_path#app/}
+        rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
+        clean_path=$(basename "$rel_path")
       if [ -z "$clean_files" ]; then
         clean_files="$clean_path"
       else
@@ -908,32 +900,50 @@ if [ "$INTERACTIVE" = true ]; then
 fi
 printf "\n"
 
-# Prepare table data
+# Prepare table data and collect statistics in single pass
 table_data=""
 table_data+="Endpoint|Methods|Status|Count|Files\n"
 
-# Collect data and build table rows
+# Initialize statistics
+used_endpoints=0
+unused_endpoints=0
+total_files=0
+verbose_endpoints=""
+
+# Collect data and build table rows while calculating statistics
 while IFS='|' read -r endpoint methods; do
   if [ -n "$endpoint" ] && [ -n "$methods" ]; then
     # Find all files where the endpoint is used (excluding specified file and API spec)
     files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
+     # Debug
+     echo "DEBUG: endpoint=$endpoint, methods=$methods" >&2
 
     if [ -n "$files" ]; then
       status="${GREEN}✓ USED${NC}"
       # Count files
       count=$(fast_count_files "$files")
       files_formatted=$(format_file_list "$files" "$count" "table")
+      ((used_endpoints++))
+      if [ "$QUICK_MODE" = false ]; then
+        file_count=$(echo "$files" | wc -l)
+        total_files=$((total_files + file_count))
+      fi
+      # Store endpoint info for verbose output
+      if [ "$VERBOSE" = true ]; then
+        verbose_endpoints="$verbose_endpoints$endpoint|$methods|$files|$count"$'\n'
+      fi
     else
       status="${RED}✗ UNUSED${NC}"
       count=0
       files_formatted="-"
+      ((unused_endpoints++))
     fi
-    
+
     # Skip if unused-only filter is set and endpoint is used
     if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
       continue
     fi
-    
+
     # Add row to table data
     table_data+="$endpoint|${YELLOW}$methods${NC}|$status|$count|${BLUE}$files_formatted${NC}\n"
   fi
@@ -941,27 +951,6 @@ done <<< "$endpoints"
 
 # Print the table using column for proper alignment
 printf "%b" "$table_data" | column -t -s '|'
-
-# Summary statistics
-used_endpoints=0
-unused_endpoints=0
-total_files=0
-
-# Count usage statistics
-while IFS='|' read -r endpoint methods; do
-  if [ -n "$endpoint" ] && [ -n "$methods" ]; then
-    files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-    if [ -n "$files" ]; then
-      ((used_endpoints++))
-      if [ "$QUICK_MODE" = false ]; then
-        file_count=$(echo "$files" | wc -l)
-        total_files=$((total_files + file_count))
-      fi
-    else
-      ((unused_endpoints++))
-    fi
-  fi
-done <<< "$endpoints"
 
 total_endpoints=$((used_endpoints + unused_endpoints))
 
@@ -983,36 +972,31 @@ fi
 if [ "$VERBOSE" = true ]; then
   printf "\n${BOLD}Detailed File References:${NC}\n"
   detailed_shown=false
-  while IFS='|' read -r endpoint methods; do
-    if [ -n "$endpoint" ] && [ -n "$methods" ]; then
-      files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-      if [ -n "$files" ]; then
-        count=$(fast_count_files "$files")
-        
-        # Skip if unused-only filter is set and endpoint is used
-        if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-          continue
-        fi
-        
-        if [ "$count" != "0" ]; then
-          detailed_shown=true
-          if [ "$QUICK_MODE" = true ]; then
-            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (files found):\n" "$endpoint" "$methods"
-          else
-            printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
-          fi
-            echo "$files" | while read -r file; do
-              if [ -n "$file" ]; then
-                rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
-                clean_path=${rel_path#app/}
-                printf "  ${BLUE}• %s${NC}\n" "$clean_path"
-              fi
-            done
-        fi
+
+  # Process stored verbose endpoint data
+  while IFS='|' read -r endpoint methods files count; do
+    if [ -n "$endpoint" ] && [ -n "$files" ]; then
+      # Skip if unused-only filter is set and endpoint is used
+      if [ "$UNUSED_ONLY" = true ]; then
+        continue
       fi
+
+      detailed_shown=true
+      if [ "$QUICK_MODE" = true ]; then
+        printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (files found):\n" "$endpoint" "$methods"
+      else
+        printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+      fi
+        echo "$files" | while read -r file; do
+          if [ -n "$file" ]; then
+            rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
+            clean_path=${rel_path#app/}
+            printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+          fi
+        done
     fi
-  done <<< "$endpoints"
-  
+  done <<< "$verbose_endpoints"
+
   if [ "$detailed_shown" = false ]; then
     printf "  ${DIM}No matching endpoints found.${NC}\n"
   fi
@@ -1020,31 +1004,26 @@ elif [ "$QUICK_MODE" = false ]; then
   if [ "$TRUNCATE_FILES" = true ]; then
     printf "\n${BOLD}Detailed File References (for endpoints with 3+ usages):${NC}\n"
     detailed_shown=false
-    while IFS='|' read -r endpoint methods; do
-      if [ -n "$endpoint" ] && [ -n "$methods" ]; then
-        files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-        if [ -n "$files" ]; then
-          count=$(fast_count_files "$files")
-          
-          # Skip if unused-only filter is set and endpoint is used
-          if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-            continue
-          fi
-          
-           if [ "$count" -ge 3 ]; then
-             detailed_shown=true
-             printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
-             echo "$files" | while read -r file; do
-               if [ -n "$file" ]; then
-                 rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
-                 clean_path=${rel_path#app/}
-                 printf "  ${BLUE}• %s${NC}\n" "$clean_path"
-               fi
-             done
-          fi
+
+    # Process stored verbose endpoint data for 3+ usages
+    while IFS='|' read -r endpoint methods files count; do
+      if [ -n "$endpoint" ] && [ -n "$files" ] && [ "$count" -ge 3 ]; then
+        # Skip if unused-only filter is set and endpoint is used
+        if [ "$UNUSED_ONLY" = true ]; then
+          continue
         fi
+
+        detailed_shown=true
+        printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+        echo "$files" | while read -r file; do
+          if [ -n "$file" ]; then
+            rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
+            clean_path=${rel_path#app/}
+            printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+          fi
+        done
       fi
-    done <<< "$endpoints"
+    done <<< "$verbose_endpoints"
 
     if [ "$detailed_shown" = false ]; then
       if [ "$UNUSED_ONLY" = true ]; then
@@ -1056,31 +1035,25 @@ elif [ "$QUICK_MODE" = false ]; then
   else
     printf "\n${BOLD}Detailed File References (for endpoints with 2+ usages):${NC}\n"
     detailed_shown=false
-    while IFS='|' read -r endpoint methods; do
-      if [ -n "$endpoint" ] && [ -n "$methods" ]; then
-        files=$(fast_search "$endpoint" "$methods" "$CODE_DIR" "$EXCLUDE_FILE" "$API_SPEC")
-        if [ -n "$files" ]; then
-          count=$(fast_count_files "$files")
-          
-          # Skip if unused-only filter is set and endpoint is used
-          if [ "$UNUSED_ONLY" = true ] && [ "$count" != "0" ]; then
-            continue
-          fi
-          
-           if [ "$count" -ge 2 ] && [ "$count" != "1+" ]; then
-             detailed_shown=true
-             printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
-             echo "$files" | while read -r file; do
-               if [ -n "$file" ]; then
-                 rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
-                 clean_path=${rel_path#app/}
-                 printf "  ${BLUE}• %s${NC}\n" "$clean_path"
-               fi
-             done
-          fi
+
+    # Process stored verbose endpoint data for 2+ usages
+    while IFS='|' read -r endpoint methods files count; do
+      if [ -n "$endpoint" ] && [ -n "$files" ] && [ "$count" -ge 2 ] && [ "$count" != "1+" ]; then
+        # Skip if unused-only filter is set and endpoint is used
+        if [ "$UNUSED_ONLY" = true ]; then
+          continue
         fi
+        detailed_shown=true
+        printf "\n${YELLOW}%s${NC} [${BLUE}%s${NC}] (%s files):\n" "$endpoint" "$methods" "$count"
+        echo "$files" | while read -r file; do
+          if [ -n "$file" ]; then
+            rel_path=$(realpath "$file" 2>/dev/null || echo "$file")
+            clean_path=${rel_path#app/}
+            printf "  ${BLUE}• %s${NC}\n" "$clean_path"
+          fi
+        done
       fi
-    done <<< "$endpoints"
+    done <<< "$verbose_endpoints"
 
     if [ "$detailed_shown" = false ]; then
       if [ "$UNUSED_ONLY" = true ]; then

@@ -1,0 +1,61 @@
+2025-10-15 17:56:39 Starting epcheck testbench v1.0
+2025-10-15 17:56:39 Results will be saved to: /Users/henry/.local/bin/testbench/v1.0/results
+2025-10-15 17:56:39 Log file: /Users/henry/.local/bin/testbench/v1.0/results/test-run-20251015-175639.log
+2025-10-15 17:56:39 =========================================
+2025-10-15 17:56:39 🔍 Discovering test cases...
+2025-10-15 17:56:39 📋 Found 5 test cases
+2025-10-15 17:56:39 
+2025-10-15 17:56:39 🧪 Running test: test-basic
+2025-10-15 17:56:39 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-basic
+2025-10-15 17:56:39 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -d src --no-colors 
+2025-10-15 17:56:41 ⏱️  Execution time: 2.00s
+2025-10-15 17:56:41 🔍 Validating table output...
+2025-10-15 17:56:41 ❌ table output validation failed
+2025-10-15 17:56:41 Differences found. Run: diff '/Users/henry/.local/bin/testbench/v1.0/test-basic/expected-table.txt.normalized' '/Users/henry/.local/bin/testbench/v1.0/results/test-basic-output.txt.normalized'
+2025-10-15 17:56:41 ❌ Test test-basic FAILED
+2025-10-15 17:56:41 
+2025-10-15 17:56:41 🧪 Running test: test-complex
+2025-10-15 17:56:41 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-complex
+2025-10-15 17:56:41 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.yaml -d src --no-colors 
+2025-10-15 17:56:43 ⏱️  Execution time: 2.00s
+2025-10-15 17:56:43 ✅ Test test-complex PASSED
+2025-10-15 17:56:43 
+2025-10-15 17:56:43 🧪 Running test: test-edge-cases
+2025-10-15 17:56:43 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-edge-cases
+2025-10-15 17:56:43 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s no-usage-spec.json -d src --no-colors 
+2025-10-15 17:56:45 ⏱️  Execution time: 2.00s
+2025-10-15 17:56:45 ✅ Test test-edge-cases PASSED
+2025-10-15 17:56:45 
+2025-10-15 17:56:45 🧪 Running test: test-options
+2025-10-15 17:56:45 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-options
+2025-10-15 17:56:45 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s openapi.json -d src --unused-only --no-colors 
+2025-10-15 17:56:47 ⏱️  Execution time: 2.00s
+2025-10-15 17:56:47 🔍 Validating table output...
+2025-10-15 17:56:47 ❌ table output validation failed
+2025-10-15 17:56:47 Differences found. Run: diff '/Users/henry/.local/bin/testbench/v1.0/test-options/expected-table.txt.normalized' '/Users/henry/.local/bin/testbench/v1.0/results/test-options-output.txt.normalized'
+2025-10-15 17:56:47 ❌ Test test-options FAILED
+2025-10-15 17:56:47 
+2025-10-15 17:56:47 🧪 Running test: test-performance
+2025-10-15 17:56:47 📁 Test directory: /Users/henry/.local/bin/testbench/v1.0/test-performance
+2025-10-15 17:56:47 🚀 Executing: /Users/henry/.local/bin/testbench/v1.0/../../epcheck -s large-spec.json -d src --no-colors 
+2025-10-15 17:56:50 ⏱️  Execution time: 3.00s
+2025-10-15 17:56:50 ✅ Test test-performance PASSED
+2025-10-15 17:56:50 
+2025-10-15 17:56:50 =========================================
+2025-10-15 17:56:50 📊 TEST SUMMARY
+2025-10-15 17:56:50 =========================================
+2025-10-15 17:56:50 Total tests: 5
+2025-10-15 17:56:50 ✅ Passed: 3
+2025-10-15 17:56:50 ❌ Failed: 2
+2025-10-15 17:56:50 ⚠️  Skipped: 0
+2025-10-15 17:56:50 📈 Pass rate: 60%
+2025-10-15 17:56:50 
+2025-10-15 17:56:50 ⏱️  PERFORMANCE SUMMARY
+2025-10-15 17:56:50 =========================================
+2025-10-15 17:56:50   test-basic: 2.00s
+2025-10-15 17:56:50   test-complex: 2.00s
+2025-10-15 17:56:50   test-edge-cases: 2.00s
+2025-10-15 17:56:50   test-options: 2.00s
+2025-10-15 17:56:50   test-performance: 3.00s
+2025-10-15 17:56:50 📄 Summary saved to: /Users/henry/.local/bin/testbench/v1.0/results/summary.txt
+2025-10-15 17:56:50 ❌ Some tests failed. Check the log file for details.

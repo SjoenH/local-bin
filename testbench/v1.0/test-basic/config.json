@@ -1,7 +1,7 @@
 {
   "name": "test-basic",
   "description": "Basic functionality test with mixed used/unused endpoints",
-  "args": ["-d", "src", "--no-colors"],
+  "args": ["-s", "openapi.json", "-d", "src", "--no-colors"],
   "expected_exit_code": 0,
   "expected_files": {
     "table": "expected-table.txt"

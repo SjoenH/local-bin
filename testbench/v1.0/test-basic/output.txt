@@ -1,12 +1,23 @@
+Using npx openapi-typescript to parse OpenAPI spec
 
 OpenAPI Endpoint Usage Report
-Generated on [DATE]
-API Spec: [SPEC_PATH]
-Search Dir: [DIR_PATH]
+Generated on Wed Oct 15 19:28:46 CEST 2025
+API Spec: /Users/henry/.local/bin/testbench/v1.0/test-basic/openapi.json
+Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-basic/src
 Excluding: openapi.json
 Search: ripgrep (fast)
 Mode: Full file lists (use --truncate to limit)
 
+DEBUG: searching for pattern: GET.*/api/users|get.*/api/users
+DEBUG: endpoint=/api/users, methods=GET
+DEBUG: searching for pattern: POST.*/api/users|post.*/api/users
+DEBUG: endpoint=/api/users, methods=POST
+DEBUG: searching for pattern: GET.*/api/users/\{id\}|get.*/api/users/\{id\}
+DEBUG: endpoint=/api/users/{id}, methods=GET
+DEBUG: searching for pattern: PUT.*/api/users/\{id\}|put.*/api/users/\{id\}
+DEBUG: endpoint=/api/users/{id}, methods=PUT
+DEBUG: searching for pattern: GET.*/api/products|get.*/api/products
+DEBUG: endpoint=/api/products, methods=GET
 Endpoint         Methods  Status    Count     Files
 /api/users       GET      ✓ USED           2  traditionalCalls.ts, userService.ts
 /api/users       POST     ✓ USED           2  traditionalCalls.ts, userService.ts

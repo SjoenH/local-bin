@@ -1,3 +1,1 @@
-No OpenAPI spec provided, searching for common spec files...
-Error: No OpenAPI spec file found. Please specify one with -s/--spec.
-Common file names: openapi.json, openapi.yaml, swagger.json, etc.
+

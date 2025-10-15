@@ -1,32 +1,59 @@
 
 OpenAPI Endpoint Usage Report
-Generated on Wed Oct 15 17:50:49 CEST 2025
+Generated on Wed Oct 15 19:46:51 CEST 2025
 API Spec: /Users/henry/.local/bin/testbench/v1.0/test-basic/openapi.json
 Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-basic/src
 Excluding: openapi.json
 Search: ripgrep (fast)
 Mode: Full file lists (use --truncate to limit)
 
-Endpoint         Methods   Status    Count     Files
-/api/users       GET,POST  ✓ USED           2  /Users/henry/.local/bin/testbench/v1.0/test-basic/src/traditionalCalls.ts, /Users/henry/.local/bin/testbench/v1.0/test-basic/src/userService.ts
-/api/users/{id}  GET,PUT   ✗ UNUSED  0         -
-/api/products    GET       ✗ UNUSED  0         -
+DEBUG: searching for pattern: GET.*/api/users|get.*/api/users
+DEBUG: endpoint=/api/users, methods=GET
+DEBUG: searching for pattern: POST.*/api/users|post.*/api/users
+DEBUG: endpoint=/api/users, methods=POST
+DEBUG: searching for pattern: GET.*/api/users/\{id\}|get.*/api/users/\{id\}
+DEBUG: endpoint=/api/users/{id}, methods=GET
+DEBUG: searching for pattern: PUT.*/api/users/\{id\}|put.*/api/users/\{id\}
+DEBUG: endpoint=/api/users/{id}, methods=PUT
+DEBUG: searching for pattern: GET.*/api/products|get.*/api/products
+DEBUG: endpoint=/api/products, methods=GET
+Endpoint         Methods  Status    Count     Files
+/api/users       GET      ✓ USED           2  traditionalCalls.ts, userService.ts
+/api/users       POST     ✓ USED           2  traditionalCalls.ts, userService.ts
+/api/users/{id}  GET      ✓ USED           1  userService.ts
+/api/users/{id}  PUT      ✗ UNUSED  0         -
+/api/products    GET      ✗ UNUSED  0         -
 
 Summary:
-  Total endpoints: 3
-  Used: 1
+  Total endpoints: 5
+  Used: 3
   Unused: 2
-  Coverage: 33.3%
-  Total file references: 2
+  Coverage: 60.0%
+  Total file references: 5
 
 Detailed File References (for endpoints with 2+ usages):
-
-/api/users [GET,POST] (       2 files):
-  • /Users/henry/.local/bin/testbench/v1.0/test-basic/src/traditionalCalls.ts
-  • /Users/henry/.local/bin/testbench/v1.0/test-basic/src/userService.ts
+  No endpoints with 2 or more file references found.
 
 Note: This script searches for endpoint usage in multiple patterns:
       1. Exact string matches: ""
       2. Method calls: .GET(""), .POST(""), etc.
       3. Path parameters: {id} matches actual values like 123, abc, etc.
       The API spec file is automatically excluded from the search results.
+        1.90 real         1.29 user         0.43 sys
+           154025984  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               68466  page reclaims
+                 161  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  24  messages sent
+                  44  messages received
+                  58  signals received
+                 369  voluntary context switches
+               10587  involuntary context switches
+            62941614  instructions retired
+            38979935  cycles elapsed
+             2360128  peak memory footprint

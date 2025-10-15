@@ -1,22 +1,20 @@
+Using Node.js to parse OpenAPI spec
 
 OpenAPI Endpoint Usage Report
-Generated on Wed Oct 15 17:50:51 CEST 2025
+Generated on Wed Oct 15 19:46:53 CEST 2025
 API Spec: /Users/henry/.local/bin/testbench/v1.0/test-complex/openapi.yaml
 Search Dir: /Users/henry/.local/bin/testbench/v1.0/test-complex/src
 Excluding: openapi.yaml
 Search: ripgrep (fast)
 Mode: Full file lists (use --truncate to limit)
 
-Endpoint                                   Methods         Status    Count  Files
-/api/organizations/{orgId}/users           GET,POST        ✗ UNUSED  0      -
-/api/organizations/{orgId}/users/{userId}  GET,PUT,DELETE  ✗ UNUSED  0      -
-/api/projects/{projectId}/tasks            GET             ✗ UNUSED  0      -
+Endpoint  Methods  Status  Count  Files
 
 Summary:
-  Total endpoints: 3
+  Total endpoints: 0
   Used: 0
-  Unused: 3
-  Coverage: 0%
+  Unused: 0
+  Coverage: 0.0%
   Total file references: 0
 
 Detailed File References (for endpoints with 2+ usages):
@@ -27,3 +25,21 @@ Note: This script searches for endpoint usage in multiple patterns:
       2. Method calls: .GET(""), .POST(""), etc.
       3. Path parameters: {id} matches actual values like 123, abc, etc.
       The API spec file is automatically excluded from the search results.
+        1.66 real         1.23 user         0.28 sys
+           160841728  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               28311  page reclaims
+                  20  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  24  messages sent
+                  44  messages received
+                   9  signals received
+                  52  voluntary context switches
+                9350  involuntary context switches
+            50017691  instructions retired
+            26652913  cycles elapsed
+             2261824  peak memory footprint

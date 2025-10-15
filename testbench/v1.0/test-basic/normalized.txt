@@ -1,3 +1,4 @@
+Using npx openapi-typescript to parse OpenAPI spec
 
 OpenAPI Endpoint Usage Report
 Generated on [DATE]
