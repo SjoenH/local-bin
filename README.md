@@ -8,7 +8,7 @@ A collection of personal command-line utilities designed to streamline common de
 
 Before installing these scripts, ensure you have the following dependencies installed:
 - `bash` (usually pre-installed on Mac/Linux)
-- `rust` (Rust toolchain) - for epcheck (compiled binary provided)
+- `rust` (Rust toolchain) - for epcheck, usersecrets, and lspkg (compiled binaries provided)
 - `gh` (GitHub CLI) - for scripts that interact with GitHub
 - `ollama` - for AI-powered scripts (ai-story, ai_readme, gcm, labelai)
 - `fd` - for scripts that search files (lspkg, usersecrets)
@@ -49,13 +49,17 @@ If you prefer to install manually or the setup script doesn't work:
     git clone https://github.com/SjoenH/local-bin.git ~/.local/bin
     ```
 
-2.  **Build the Rust binaries** (required for epcheck):
+2.  **Build the Rust binaries** (required for epcheck, usersecrets, and lspkg):
 
     ```bash
-    # Build the optimized epcheck binary
-    cd epcheck-rust
-    cargo build --release
-    cd ..
+    # Build the optimized binaries
+    for dir in epcheck-rust usersecrets-rust lspkg-rust; do
+        if [ -d "$dir" ]; then
+            cd "$dir"
+            cargo build --release
+            cd ..
+        fi
+    done
     ```
 
 3.  **Make the scripts executable** (if not already):
@@ -285,7 +289,9 @@ Usage:
 ### lspkg
 ------------
 
-A Bash script that lists npm packages in the current directory and its subdirectories, displaying package metadata such as name, version, description, and path. It takes command-line arguments to customize its behavior.
+A high-performance tool that lists npm packages in the current directory and its subdirectories, displaying package metadata such as name, version, description, and path. It takes command-line arguments to customize its behavior.
+
+**Note:** `lspkg` is now implemented in Rust for significantly better performance. The original Bash version is available as `lspkg-bash` for compatibility or when Rust is not available.
 
 Usage:
 ```bash
@@ -295,11 +301,13 @@ Usage:
 ### usersecrets
 -----------------
 
-A script that searches for `.csproj` files in a specified directory (or current directory if not provided) and its subdirectories, listing the locations of secrets associated with them. It uses `fd` to find `.csproj` files and then extracts their corresponding UserSecretsId using `awk`.
+A high-performance tool that searches for `.csproj` files in a specified directory (or current directory if not provided) and its subdirectories, listing the locations of secrets associated with them. It can also create new secret files and add them to .csproj files.
+
+**Note:** `usersecrets` is now implemented in Rust for significantly better performance and safety. The original Bash version is available as `usersecrets-bash` for compatibility or when Rust is not available.
 
 Usage:
 ```bash
-./usersecrets [directory]
+./usersecrets [OPTIONS] [directory]
 ```
 
 ## Conclusion

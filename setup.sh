@@ -99,28 +99,31 @@ main() {
     if [ "$HAS_RUST" = true ]; then
         print_header "Building Rust Binaries"
 
-        if [ -d "epcheck-rust" ]; then
-            print_info "Building epcheck (this may take a moment)..."
-            cd epcheck-rust
+        RUST_PROJECTS=("epcheck-rust" "usersecrets-rust" "lspkg-rust")
+        for project in "${RUST_PROJECTS[@]}"; do
+            if [ -d "$project" ]; then
+                print_info "Building $project (this may take a moment)..."
+                cd "$project"
 
-            if cargo build --release; then
-                print_success "epcheck built successfully"
-                cd ..
+                if cargo build --release; then
+                    print_success "$project built successfully"
+                    cd ..
+                else
+                    print_error "Failed to build $project"
+                    cd ..
+                    exit 1
+                fi
             else
-                print_error "Failed to build epcheck"
-                cd ..
-                exit 1
+                print_warning "$project directory not found, skipping"
             fi
-        else
-            print_warning "epcheck-rust directory not found, skipping Rust build"
-        fi
+        done
     fi
 
     # Make scripts executable
     print_header "Making Scripts Executable"
 
     # Find all executable files (excluding certain directories)
-    find . -type f -name "*.sh" -o -name "*.bash" -o -name "epcheck*" -o -name "ai-*" -o -name "depcheck" -o -name "lspkg" -o -name "usersecrets" -o -name "gcm" -o -name "labelai" -o -name "webi" | while read -r file; do
+    find . -type f -name "*.sh" -o -name "*.bash" -o -name "epcheck*" -o -name "ai-*" -o -name "depcheck" -o -name "lspkg*" -o -name "usersecrets*" -o -name "gcm" -o -name "labelai" -o -name "webi" | while read -r file; do
         # Skip files in target directories, .git, etc.
         if [[ "$file" != *"/target/"* && "$file" != *"/.git/"* && "$file" != *"/node_modules/"* && "$file" != *"/testbench/"* ]]; then
             if [ -f "$file" ] && [ ! -x "$file" ]; then
@@ -130,14 +133,20 @@ main() {
         fi
     done
 
-    # Special handling for epcheck symlinks
-    if [ -L "epcheck" ] && [ "$HAS_RUST" = true ]; then
-        print_success "epcheck symlink is properly configured"
-    elif [ "$HAS_RUST" = true ] && [ -f "epcheck-rust/target/release/epcheck" ]; then
-        print_info "Creating epcheck symlink..."
-        ln -sf epcheck-rust/target/release/epcheck epcheck
-        print_success "epcheck symlink created"
-    fi
+    # Special handling for Rust binary symlinks
+    RUST_TOOLS=("epcheck:epcheck-rust" "usersecrets:usersecrets-rust" "lspkg:lspkg-rust")
+    for tool_info in "${RUST_TOOLS[@]}"; do
+        tool_name="${tool_info%%:*}"
+        project_dir="${tool_info##*:}"
+
+        if [ -L "$tool_name" ] && [ "$HAS_RUST" = true ]; then
+            print_success "$tool_name symlink is properly configured"
+        elif [ "$HAS_RUST" = true ] && [ -f "$project_dir/target/release/$tool_name" ]; then
+            print_info "Creating $tool_name symlink..."
+            ln -sf "$project_dir/target/release/$tool_name" "$tool_name"
+            print_success "$tool_name symlink created"
+        fi
+    done
 
     # Check PATH
     print_header "PATH Configuration"
@@ -195,7 +204,19 @@ main() {
     fi
 
     if [ -x "./lspkg" ]; then
-        print_success "lspkg is executable"
+        if [ "$HAS_RUST" = true ] && [ -L "./lspkg" ]; then
+            print_success "lspkg (Rust) is working"
+        else
+            print_success "lspkg is executable"
+        fi
+    fi
+
+    if [ -x "./usersecrets" ]; then
+        if [ "$HAS_RUST" = true ] && [ -L "./usersecrets" ]; then
+            print_success "usersecrets (Rust) is working"
+        else
+            print_success "usersecrets is executable"
+        fi
     fi
 
     # Summary
@@ -205,12 +226,14 @@ main() {
     echo "  - epcheck (Rust) - Fast OpenAPI endpoint checker"
     echo "  - epcheck-bash - Bash version of epcheck"
     echo "  - depcheck - Check package dependencies"
-    echo "  - lspkg - List npm packages"
+    echo "  - lspkg (Rust) - Fast npm package lister"
+    echo "  - lspkg-bash - Bash version of lspkg"
+    echo "  - usersecrets (Rust) - Fast .NET user secrets manager"
+    echo "  - usersecrets-bash - Bash version of usersecrets"
     echo "  - ai-story - Generate stories from GitHub issues"
     echo "  - ai-readme - Generate README files"
     echo "  - gcm - Generate commit messages"
     echo "  - labelai - Generate GitHub issue labels"
-    echo "  - usersecrets - Find .NET user secrets"
     echo "  - webi - Web installer script"
 
     if [ "$HAS_RUST" = true ]; then
