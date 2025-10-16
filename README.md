@@ -282,6 +282,7 @@ A modern terminal user interface (TUI) for running and visualizing epcheck testb
 - **Real-time Test Execution**: Run tests directly from the interface
 - **Performance Visualization**: Charts showing duration and memory usage trends
 - **Historical Analysis**: Browse past test runs with detailed results
+- **Performance Monitoring**: Automatic regression detection with configurable thresholds
 - **Headless Mode**: `--run-only` flag for CI/CD integration
 - **Database Integration**: Uses the same SQLite database as the test suite
 
@@ -297,6 +298,34 @@ A modern terminal user interface (TUI) for running and visualizing epcheck testb
 ./testbench-tui --run-only                    # Run tests and exit
 ./testbench-tui --run-only --testbench-path /path/to/testbench
 ```
+
+**Performance Monitoring:**
+```bash
+./testbench-tui --run-only --performance-check  # Run tests with performance regression detection
+./testbench-tui --run-only --reset-baseline     # Reset performance baseline
+```
+
+The performance monitoring feature automatically detects performance regressions by comparing current test execution times against a baseline. It creates a `performance-baseline.json` file on first run and updates it after each successful test run.
+
+- **Threshold**: 10% degradation threshold (configurable)
+- **Detection**: Only flags actual performance regressions (slower execution)
+- **Baseline Management**: Automatically updates baseline with current performance, or manually reset with `--reset-baseline`
+- **Pre-commit Integration**: Automatically runs on epcheck Rust code changes
+
+#### Troubleshooting:
+
+**Performance Check Issues:**
+- **"No performance baseline found"**: This is normal on first run - a baseline will be created
+- **"Performance regression detected"**: Check if the degradation is expected (e.g., new features). You can manually update the baseline by deleting `testbench/v1.0/results/performance-baseline.json`
+- **Tests timing out**: Some tests may be network-dependent. Check test configurations in `config.json` files
+
+**Database Issues:**
+- **"Database locked"**: Close any other instances of testbench-tui or test-browser.sh
+- **Corrupted database**: Delete `testbench/v1.0/results/testbench.db` and re-run tests
+
+**Build Issues:**
+- **"testbench-tui not found"**: Run `./setup.sh` to rebuild binaries
+- **Compilation errors**: Ensure Rust toolchain is installed and up to date
 
 #### Interface Overview:
 

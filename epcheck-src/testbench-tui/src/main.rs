@@ -62,34 +62,32 @@ async fn perform_performance_check(db: &Database, results_dir: &PathBuf) -> Resu
     // Compare performance
     const PERFORMANCE_THRESHOLD: f64 = 0.10; // 10% degradation allowed
     let mut total_degradation = 0.0;
-    let mut test_count = 0;
+    let mut degradation_count = 0;
     let mut warnings = Vec::new();
 
     for (test_name, current_avg) in &current_averages {
         if let Some(baseline_avg) = baseline_averages.get(test_name) {
-            let degradation = (current_avg - baseline_avg) / baseline_avg;
-            total_degradation += degradation.abs();
-            test_count += 1;
-
-            if degradation.abs() > PERFORMANCE_THRESHOLD {
-                let direction = if degradation > 0.0 { "slower" } else { "faster" };
-                let percent = if *baseline_avg > 0.0 {
-                    (degradation.abs() * 100.0).round()
-                } else {
-                    0.0 // New test or baseline was 0
-                };
-                warnings.push(format!(
-                    "⚠️  {}: {:.3}s → {:.3}s ({:.1}% {})",
-                    test_name, baseline_avg, current_avg, percent, direction
-                ));
+            if *baseline_avg > 0.0 {
+                let degradation = (current_avg - baseline_avg) / baseline_avg;
+                if degradation > PERFORMANCE_THRESHOLD {
+                    let percent = (degradation * 100.0).round();
+                    warnings.push(format!(
+                        "⚠️  {}: {:.3}s → {:.3}s ({:.1}% slower)",
+                        test_name, baseline_avg, current_avg, percent
+                    ));
+                    total_degradation += degradation;
+                    degradation_count += 1;
+                }
+            } else if *current_avg > 0.0 {
+                // Baseline was 0, now has performance data - not a degradation
+                println!("📊 Test '{}' now has performance data: {:.3}s", test_name, current_avg);
             }
         } else {
             println!("📊 New test '{}' added to performance tracking", test_name);
         }
     }
 
-    let avg_degradation = if test_count > 0 { total_degradation / test_count as f64 } else { 0.0 };
-    let avg_percent = if avg_degradation.abs() > 0.0 { (avg_degradation.abs() * 100.0).round() } else { 0.0 };
+    let avg_degradation = if degradation_count > 0 { total_degradation / degradation_count as f64 } else { 0.0 };
 
     if !warnings.is_empty() {
         println!("🚨 Performance degradation detected:");
@@ -136,6 +134,10 @@ struct Args {
     /// Run performance check and compare against baseline
     #[arg(long)]
     performance_check: bool,
+
+    /// Reset performance baseline (removes existing baseline)
+    #[arg(long)]
+    reset_baseline: bool,
 }
 
 #[tokio::main]
@@ -165,7 +167,17 @@ async fn main() -> Result<()> {
                         latest.total_tests, latest.passed_tests, latest.failed_tests, latest.skipped_tests);
                 }
 
-                if args.performance_check {
+                        if args.reset_baseline {
+                    // Reset performance baseline
+                    let baseline_file = results_dir.join("performance-baseline.json");
+                    if baseline_file.exists() {
+                        tokio::fs::remove_file(&baseline_file).await?;
+                        println!("✅ Performance baseline reset");
+                    } else {
+                        println!("ℹ️  No performance baseline found to reset");
+                    }
+                    std::process::exit(0);
+                } else if args.performance_check {
                     // Perform performance check
                     match perform_performance_check(&db, &results_dir).await {
                         Ok(_) => {

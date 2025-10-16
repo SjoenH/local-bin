@@ -1,3 +1,4 @@
+// Main entry point for epcheck
 use clap::Parser;
 use epcheck::{run, Cli};
 use std::process;
