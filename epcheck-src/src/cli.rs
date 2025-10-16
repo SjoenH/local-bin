@@ -57,6 +57,7 @@ pub enum OutputFormat {
     Table,
     Csv,
     Json,
+    Markdown,
 }
 
 /// Load and parse OpenAPI specification
