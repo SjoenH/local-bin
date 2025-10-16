@@ -5,12 +5,12 @@ use std::path::PathBuf;
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Path or URL to OpenAPI specification file (JSON or YAML)
+    /// Path or URL to OpenAPI specification file (JSON or YAML). If not provided, searches for common spec files in current and parent directories.
     #[clap(short, long, value_name = "SPEC")]
-    pub spec: String,
+    pub spec: Option<String>,
 
     /// Directory to search for endpoint usage
-    #[clap(short, long, value_name = "DIR")]
+    #[clap(short, long, value_name = "DIR", default_value = ".")]
     pub dir: PathBuf,
 
     /// Output format
@@ -101,4 +101,33 @@ pub async fn load_openapi_spec(spec_path: &str) -> anyhow::Result<crate::openapi
             }
         }
     }
+}
+
+/// Find the closest OpenAPI specification file by searching common names in current and parent directories
+pub fn find_openapi_spec() -> Option<String> {
+    let current = std::env::current_dir().ok()?;
+    let names = [
+        "openapi.json",
+        "openapi.yaml",
+        "openapi.yml",
+        "swagger.json",
+        "swagger.yaml",
+        "swagger.yml",
+    ];
+
+    let mut dir = current.as_path();
+    loop {
+        for name in &names {
+            let path = dir.join(name);
+            if path.exists() {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+        if let Some(parent) = dir.parent() {
+            dir = parent;
+        } else {
+            break;
+        }
+    }
+    None
 }

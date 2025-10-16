@@ -26,7 +26,7 @@ impl OutputFormatter {
         println!("\n{}", "=".repeat(80));
         println!("OpenAPI Endpoint Usage Report");
         println!("Generated on {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("API Spec: {}", cli.spec);
+        println!("API Spec: {}", cli.spec.as_deref().unwrap_or("auto-detected"));
         println!("Search Dir: {}", cli.dir.display());
 
         // Show exclusions if any

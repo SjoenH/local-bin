@@ -3,7 +3,7 @@ name = "epcheck"
 version = "0.1.0"
 edition = "2021"
 description = "Fast OpenAPI endpoint usage checker"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Henry Sjøen <henry@koka.no>"]
 
 [dependencies]
 # OpenAPI parsing
