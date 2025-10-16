@@ -99,7 +99,7 @@ main() {
     if [ "$HAS_RUST" = true ]; then
         print_header "Building Rust Binaries"
 
-        RUST_PROJECTS=("epcheck-src" "usersecrets-src" "lspkg-src")
+        RUST_PROJECTS=("epcheck-src" "usersecrets-src" "lspkg-src" "epcheck-src/testbench-tui")
         for project in "${RUST_PROJECTS[@]}"; do
             if [ -d "$project" ]; then
                 print_info "Building $project (this may take a moment)..."
@@ -123,7 +123,7 @@ main() {
     print_header "Making Scripts Executable"
 
     # Find all executable files (excluding certain directories)
-    find . -type f -name "*.sh" -o -name "*.bash" -o -name "epcheck*" -o -name "ai-*" -o -name "depcheck" -o -name "lspkg*" -o -name "usersecrets*" -o -name "gcm" -o -name "labelai" -o -name "webi" | while read -r file; do
+    find . -type f -name "*.sh" -o -name "*.bash" -o -name "epcheck*" -o -name "ai-*" -o -name "depcheck" -o -name "lspkg*" -o -name "usersecrets*" -o -name "testbench-tui*" -o -name "gcm" -o -name "labelai" -o -name "webi" | while read -r file; do
         # Skip files in target directories, .git, etc.
         if [[ "$file" != *"/target/"* && "$file" != *"/.git/"* && "$file" != *"/node_modules/"* && "$file" != *"/testbench/"* ]]; then
             if [ -f "$file" ] && [ ! -x "$file" ]; then
@@ -134,7 +134,7 @@ main() {
     done
 
     # Special handling for Rust binary symlinks
-    RUST_TOOLS=("epcheck:epcheck-src" "usersecrets:usersecrets-src" "lspkg:lspkg-src")
+    RUST_TOOLS=("epcheck:epcheck-src" "usersecrets:usersecrets-src" "lspkg:lspkg-src" "testbench-tui:epcheck-src/testbench-tui")
     for tool_info in "${RUST_TOOLS[@]}"; do
         tool_name="${tool_info%%:*}"
         project_dir="${tool_info##*:}"
@@ -219,12 +219,21 @@ main() {
         fi
     fi
 
+    if [ -x "./testbench-tui" ]; then
+        if [ "$HAS_RUST" = true ] && [ -L "./testbench-tui" ]; then
+            print_success "testbench-tui (Rust) is working"
+        else
+            print_success "testbench-tui is executable"
+        fi
+    fi
+
     # Summary
     print_header "Setup Complete!"
 
     echo -e "${GREEN}Available tools:${NC}"
     echo "  - epcheck (Rust) - Fast OpenAPI endpoint checker"
     echo "  - epcheck-bash - Bash version of epcheck"
+    echo "  - testbench-tui (Rust) - TUI for running and visualizing epcheck testbench results"
     echo "  - depcheck - Check package dependencies"
     echo "  - lspkg (Rust) - Fast npm package lister"
     echo "  - lspkg-bash - Bash version of lspkg"

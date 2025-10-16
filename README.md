@@ -10,7 +10,7 @@ A collection of personal command-line utilities designed to streamline common de
 
 Before installing these scripts, ensure you have the following dependencies installed:
 - `bash` (usually pre-installed on Mac/Linux)
-- `rust` (Rust toolchain) - for epcheck, usersecrets, and lspkg (compiled binaries provided)
+- `rust` (Rust toolchain) - for epcheck, usersecrets, lspkg, and testbench-tui (compiled binaries provided)
 - `gh` (GitHub CLI) - for scripts that interact with GitHub
 - `ollama` - for AI-powered scripts (ai-story, ai_readme, gcm, labelai)
 - `fd` - for scripts that search files (lspkg, usersecrets)
@@ -55,7 +55,7 @@ If you prefer to install manually or the setup script doesn't work:
 
     ```bash
     # Build the optimized binaries
-    for dir in epcheck usersecrets lspkg; do
+    for dir in epcheck usersecrets lspkg epcheck/testbench-tui; do
         if [ -d "$dir" ]; then
             cd "$dir"
             cargo build --release
@@ -111,12 +111,16 @@ If you prefer to install manually or the setup script doesn't work:
     which ai-story
     which lspkg
     which epcheck
+    which testbench-tui
 
     # Try running a script (this will show the help message)
     ai-story help
 
     # Test epcheck functionality
     epcheck --help
+
+    # Test testbench-tui
+    testbench-tui --help
 
     # Test the epcheck test suite (if in the repository)
     cd testbench/v1.0 && ./run-tests.sh && ./test-browser.sh list
@@ -267,6 +271,77 @@ The SQLite database includes these tables:
 - `test_validations` - Output validation results and differences
 - `expected_results` - Static expected test outputs
 - `performance_benchmarks` - Performance tracking data
+
+### testbench-tui
+-----------------
+
+A modern terminal user interface (TUI) for running and visualizing epcheck testbench results. Built with Rust and ratatui, it provides an interactive way to run tests, view results, and analyze performance trends over time.
+
+#### Features:
+- **Interactive TUI**: Beautiful terminal interface with tabbed navigation
+- **Real-time Test Execution**: Run tests directly from the interface
+- **Performance Visualization**: Charts showing duration and memory usage trends
+- **Historical Analysis**: Browse past test runs with detailed results
+- **Headless Mode**: `--run-only` flag for CI/CD integration
+- **Database Integration**: Uses the same SQLite database as the test suite
+
+#### Usage:
+
+**Interactive Mode:**
+```bash
+./testbench-tui
+```
+
+**Headless Mode (for CI/CD):**
+```bash
+./testbench-tui --run-only                    # Run tests and exit
+./testbench-tui --run-only --testbench-path /path/to/testbench
+```
+
+#### Interface Overview:
+
+**Overview Tab:**
+- Pass rate gauge and summary statistics
+- Recent test runs table
+- Quick access to latest results
+
+**Test Runs Tab:**
+- Detailed list of all test executions
+- Navigate through test runs with arrow keys
+- View individual test details and status
+
+**Performance Tab:**
+- Performance metrics for each test
+- Execution time and memory usage data
+- Sorted tables for easy analysis
+
+**Graphs Tab:**
+- Visual charts of performance over time
+- Duration trends across test runs
+- Memory usage visualization
+
+#### Controls:
+- `← →` - Switch between tabs
+- `↑ ↓` - Navigate lists/tables
+- `r` - Run all tests
+- `h` - Show help
+- `q` - Quit
+
+#### Headless Mode:
+Perfect for automated testing pipelines. Returns appropriate exit codes:
+- `0` - All tests passed
+- `1` - Tests failed or encountered errors
+
+Example CI/CD usage:
+```yaml
+- name: Run epcheck tests
+  run: |
+    ./testbench-tui --run-only
+    if [ $? -ne 0 ]; then
+      echo "Tests failed"
+      exit 1
+    fi
+```
 
 ### gcm
 ----------

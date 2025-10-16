@@ -1,3 +1,4 @@
+workspace = { members = ["testbench-tui"] }
 [package]
 name = "epcheck"
 version = "0.1.0"
