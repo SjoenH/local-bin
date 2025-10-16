@@ -1,58 +1,57 @@
-use clap::{Parser, ValueEnum};
-use serde::{Deserialize, Serialize};
+use clap::{ArgEnum, Parser};
 use std::path::PathBuf;
 
 /// Fast OpenAPI endpoint usage checker
 #[derive(Parser, Debug, Clone)]
-#[command(author, version, about, long_about = None)]
+#[clap(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Path to OpenAPI specification file (JSON or YAML)
-    #[arg(short, long, value_name = "FILE")]
-    pub spec: PathBuf,
+    /// Path or URL to OpenAPI specification file (JSON or YAML)
+    #[clap(short, long, value_name = "SPEC")]
+    pub spec: String,
 
     /// Directory to search for endpoint usage
-    #[arg(short, long, value_name = "DIR")]
+    #[clap(short, long, value_name = "DIR")]
     pub dir: PathBuf,
 
     /// Output format
-    #[arg(short, long, value_enum, default_value_t = OutputFormat::Table)]
+    #[clap(short, long, arg_enum, default_value_t = OutputFormat::Table)]
     pub format: OutputFormat,
 
     /// Filter endpoints by regex pattern
-    #[arg(short, long, value_name = "PATTERN")]
+    #[clap(short, long, value_name = "PATTERN")]
     pub pattern: Option<String>,
 
     /// Show only unused endpoints
-    #[arg(long)]
+    #[clap(long)]
     pub unused_only: bool,
 
     /// Show detailed file information
-    #[arg(short, long)]
+    #[clap(short, long)]
     pub verbose: bool,
 
     /// Interactive mode with fuzzy search
-    #[arg(short, long)]
+    #[clap(short, long)]
     pub interactive: bool,
 
     /// Quick mode (skip detailed analysis)
-    #[arg(short, long)]
+    #[clap(short, long)]
     pub quick: bool,
 
     /// Truncate long file lists
-    #[arg(long)]
+    #[clap(long)]
     pub truncate: bool,
 
     /// Disable colored output
-    #[arg(long)]
+    #[clap(long)]
     pub no_colors: bool,
 
     /// Files to exclude from search
-    #[arg(short, long, value_name = "FILE")]
+    #[clap(short, long, value_name = "FILE")]
     pub exclude: Vec<String>,
 }
 
 /// Supported output formats
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ArgEnum)]
 pub enum OutputFormat {
     Table,
     Csv,
@@ -60,10 +59,25 @@ pub enum OutputFormat {
     Markdown,
 }
 
-/// Load and parse OpenAPI specification
-pub fn load_openapi_spec(path: &PathBuf) -> anyhow::Result<crate::openapi::OpenApiSpec> {
-    let content = std::fs::read_to_string(path)?;
-    let extension = path.extension()
+/// Load and parse OpenAPI specification from file or URL
+pub async fn load_openapi_spec(spec_path: &str) -> anyhow::Result<crate::openapi::OpenApiSpec> {
+    let content = if spec_path.starts_with("http://") || spec_path.starts_with("https://") {
+        // Fetch from URL using curl
+        let output = tokio::process::Command::new("curl")
+            .arg("-s")
+            .arg(spec_path)
+            .output()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch URL: {}. Make sure curl is installed.", e))?;
+        String::from_utf8(output.stdout)?
+    } else {
+        // Read from file
+        std::fs::read_to_string(spec_path)?
+    };
+
+    // Determine format from file extension or content
+    let extension = std::path::Path::new(spec_path)
+        .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("");
 

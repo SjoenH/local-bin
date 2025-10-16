@@ -1,0 +1,13 @@
+{
+  "name": "test-url",
+  "description": "Test URL support for OpenAPI specifications",
+  "args": ["-s", "https://ws.geonorge.no/stedsnavn/v1/openapi.json", "-d", "src", "--no-colors"],
+  "expected_exit_code": 0,
+  "expected_files": {
+    "table": "expected-table.txt"
+  },
+  "performance": {
+    "max_time_seconds": 15,
+    "max_memory_mb": 50
+  }
+}

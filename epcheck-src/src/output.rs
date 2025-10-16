@@ -26,7 +26,7 @@ impl OutputFormatter {
         println!("\n{}", "=".repeat(80));
         println!("OpenAPI Endpoint Usage Report");
         println!("Generated on {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("API Spec: {}", cli.spec.display());
+        println!("API Spec: {}", cli.spec);
         println!("Search Dir: {}", cli.dir.display());
 
         // Show exclusions if any
@@ -217,7 +217,7 @@ impl OutputFormatter {
         let output = json!({
             "report": {
                 "generated": chrono::Utc::now().to_rfc3339(),
-                "api_spec": cli.spec.to_string_lossy(),
+                "api_spec": cli.spec,
                 "search_dir": cli.dir.to_string_lossy(),
                 "files_scanned": results.total_files_scanned,
                 "scan_time_ms": results.scan_time_ms

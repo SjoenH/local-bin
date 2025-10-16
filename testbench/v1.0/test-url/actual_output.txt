@@ -1,0 +1,47 @@
+
+================================================================================
+OpenAPI Endpoint Usage Report
+Generated on 2025-10-16 15:54:48 UTC
+API Spec: https://ws.geonorge.no/stedsnavn/v1/openapi.json
+Search Dir: ../testbench/v1.0/test-url/src
+Search: ripgrep (fast)
+Mode: Full file lists (use --truncate to limit)
+================================================================================
+
+Endpoint          Methods Status Count Files
+-----------------------------------------
+/navn             GET     ✓ USED     2 app.ts, placeService.ts
+/navneobjekttyper GET     ✓ USED     2 app.ts, placeService.ts
+/punkt            GET     ✓ USED     2 app.ts, placeService.ts
+/sprak            GET     ✓ USED     2 app.ts, placeService.ts
+/sted             GET     ✓ USED     2 app.ts, placeService.ts
+
+Summary:
+  Total endpoints: 5
+  Used: 5
+  Unused: 0
+  Coverage: 100.0%
+  Total file references: 10
+
+Detailed File References (for endpoints with 2+ usages):
+  GET /navn: 2 files
+    - app.ts
+    - placeService.ts
+  GET /navneobjekttyper: 2 files
+    - app.ts
+    - placeService.ts
+  GET /punkt: 2 files
+    - app.ts
+    - placeService.ts
+  GET /sprak: 2 files
+    - app.ts
+    - placeService.ts
+  GET /sted: 2 files
+    - app.ts
+    - placeService.ts
+
+Note: This script searches for endpoint usage in multiple patterns:
+      1. Exact string matches: ""
+      2. Method calls: .GET(""), .POST(""), etc.
+      3. Path parameters: {id} matches actual values like 123, abc, etc.
+      The API spec file is automatically excluded from the search results.

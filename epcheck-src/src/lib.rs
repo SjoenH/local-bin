@@ -12,7 +12,7 @@ use anyhow::Result;
 /// Main entry point for the epcheck application
 pub async fn run(cli: Cli) -> Result<()> {
     // Load and parse OpenAPI specification
-    let spec = cli::load_openapi_spec(&cli.spec)?;
+    let spec = cli::load_openapi_spec(&cli.spec).await?;
 
     // Create analyzer
     let analyzer = EndpointAnalyzer::new(spec, cli.clone());
