@@ -11,6 +11,13 @@ use ratatui::{
 
 use crate::db::Database;
 
+#[derive(Debug)]
+enum TestResult {
+    Passed,
+    Failed,
+    Skipped,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CurrentScreen {
     Main,
@@ -133,11 +140,19 @@ impl App {
         let mut failed_tests = 0;
         let mut skipped_tests = 0;
 
+        let epcheck_path = PathBuf::from(&self.epcheck_path);
+        let epcheck_abs_path = if epcheck_path.is_absolute() {
+            epcheck_path
+        } else {
+            std::env::current_dir()?.join(epcheck_path)
+        };
+
         for test_dir in test_dirs {
             total_tests += 1;
-            match Self::run_single_test(&temp_db, &self.epcheck_path, &test_dir, run_id).await {
-                Ok(true) => passed_tests += 1,
-                Ok(false) => failed_tests += 1,
+            match Self::run_single_test(&temp_db, &epcheck_abs_path, &test_dir, run_id).await {
+                Ok(TestResult::Passed) => passed_tests += 1,
+                Ok(TestResult::Failed) => failed_tests += 1,
+                Ok(TestResult::Skipped) => skipped_tests += 1,
                 Err(_) => skipped_tests += 1,
             }
         }
@@ -182,12 +197,20 @@ impl App {
         Ok(dirs)
     }
 
-    async fn run_single_test(db: &Database, epcheck_path: &PathBuf, test_dir: &Path, run_id: i64) -> Result<bool> {
+    async fn run_single_test(db: &Database, epcheck_path: &PathBuf, test_dir: &Path, run_id: i64) -> Result<TestResult> {
         use tokio::process::Command;
 
         let test_name = test_dir.file_name()
             .and_then(|n| n.to_str())
             .context("Invalid test directory name")?;
+
+        // Check prerequisites
+        if !Self::check_prerequisites(test_dir).await? {
+            // Record as skipped
+            let execution_id = Self::record_test_execution(db, run_id, test_name, test_dir, 0.0, 0).await?;
+            Self::update_test_status(db, execution_id, "skipped").await?;
+            return Ok(TestResult::Skipped);
+        }
 
         // Load config
         let config_path = test_dir.join("config.json");
@@ -198,9 +221,14 @@ impl App {
             serde_json::json!({})
         };
 
-        let args = config.get("args")
-            .and_then(|v| v.as_str())
-            .unwrap_or("-d src --no-colors");
+        let args = if let Some(args_array) = config.get("args").and_then(|v| v.as_array()) {
+            args_array.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+        } else {
+            "-d src --no-colors".to_string()
+        };
         let expected_exit_code = config.get("expected_exit_code")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as i32;
@@ -229,11 +257,43 @@ impl App {
         // Check exit code
         if exit_code != expected_exit_code {
             Self::update_test_status(db, execution_id, "failed").await?;
-            return Ok(false);
+            return Ok(TestResult::Failed);
         }
 
         Self::update_test_status(db, execution_id, "passed").await?;
+        Ok(TestResult::Passed)
+    }
+
+    async fn check_prerequisites(test_dir: &Path) -> Result<bool> {
+        let config_path = test_dir.join("config.json");
+        if !config_path.exists() {
+            return Ok(true);
+        }
+
+        let content = tokio::fs::read_to_string(&config_path).await?;
+        let config: serde_json::Value = serde_json::from_str(&content)?;
+
+        if let Some(skip_tools) = config.get("skip_tools").and_then(|v| v.as_array()) {
+            for tool in skip_tools {
+                if let Some(tool_name) = tool.as_str() {
+                    if !Self::command_exists(tool_name).await {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+
         Ok(true)
+    }
+
+    async fn command_exists(command: &str) -> bool {
+        tokio::process::Command::new("which")
+            .arg(command)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .await
+            .map(|s| s.success())
+            .unwrap_or(false)
     }
 
     async fn record_test_execution(db: &Database, run_id: i64, test_name: &str, test_dir: &Path, duration: f64, exit_code: i32) -> Result<i64> {

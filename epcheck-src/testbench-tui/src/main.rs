@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, stdout, Stdout};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -24,28 +25,124 @@ mod db;
 use app::{App, CurrentScreen};
 use db::Database;
 
+async fn perform_performance_check(db: &Database, results_dir: &PathBuf) -> Result<()> {
+    let baseline_file = results_dir.join("performance-baseline.json");
+
+    // Get current performance data
+    let current_perf = db.get_performance_data().await?;
+
+    // Calculate average performance per test
+    let mut current_averages: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut current_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for point in &current_perf {
+        *current_counts.entry(point.test_name.clone()).or_insert(0) += 1;
+        *current_averages.entry(point.test_name.clone()).or_insert(0.0) += point.duration;
+    }
+
+    for (test_name, count) in &current_counts {
+        if let Some(avg) = current_averages.get_mut(test_name) {
+            *avg /= *count as f64;
+        }
+    }
+
+    // Load baseline if it exists
+    let baseline_averages: std::collections::HashMap<String, f64> = if baseline_file.exists() {
+        let content = tokio::fs::read_to_string(&baseline_file).await?;
+        serde_json::from_str(&content)?
+    } else {
+        println!("📊 No performance baseline found, creating new baseline...");
+        // Save current performance as baseline
+        let json = serde_json::to_string_pretty(&current_averages)?;
+        tokio::fs::write(&baseline_file, json).await?;
+        println!("✅ Performance baseline saved");
+        return Ok(());
+    };
+
+    // Compare performance
+    const PERFORMANCE_THRESHOLD: f64 = 0.10; // 10% degradation allowed
+    let mut total_degradation = 0.0;
+    let mut test_count = 0;
+    let mut warnings = Vec::new();
+
+    for (test_name, current_avg) in &current_averages {
+        if let Some(baseline_avg) = baseline_averages.get(test_name) {
+            let degradation = (current_avg - baseline_avg) / baseline_avg;
+            total_degradation += degradation.abs();
+            test_count += 1;
+
+            if degradation.abs() > PERFORMANCE_THRESHOLD {
+                let direction = if degradation > 0.0 { "slower" } else { "faster" };
+                let percent = if *baseline_avg > 0.0 {
+                    (degradation.abs() * 100.0).round()
+                } else {
+                    0.0 // New test or baseline was 0
+                };
+                warnings.push(format!(
+                    "⚠️  {}: {:.3}s → {:.3}s ({:.1}% {})",
+                    test_name, baseline_avg, current_avg, percent, direction
+                ));
+            }
+        } else {
+            println!("📊 New test '{}' added to performance tracking", test_name);
+        }
+    }
+
+    let avg_degradation = if test_count > 0 { total_degradation / test_count as f64 } else { 0.0 };
+    let avg_percent = if avg_degradation.abs() > 0.0 { (avg_degradation.abs() * 100.0).round() } else { 0.0 };
+
+    if !warnings.is_empty() {
+        println!("🚨 Performance degradation detected:");
+        for warning in warnings {
+            println!("{}", warning);
+        }
+        println!("📈 Average degradation: {:.1}%", avg_degradation * 100.0);
+
+        if avg_degradation > PERFORMANCE_THRESHOLD {
+            println!("❌ Performance degradation exceeds threshold ({}%)", PERFORMANCE_THRESHOLD * 100.0);
+            println!("💡 Consider optimizing the code or updating the baseline if this is expected");
+            return Err(anyhow::anyhow!("Performance regression detected"));
+        } else {
+            println!("✅ Performance degradation within acceptable limits");
+        }
+    } else {
+        println!("✅ No significant performance changes detected");
+    }
+
+    // Update baseline with current performance
+    let json = serde_json::to_string_pretty(&current_averages)?;
+    tokio::fs::write(&baseline_file, json).await?;
+    println!("📊 Performance baseline updated");
+
+    Ok(())
+}
+
 #[derive(Parser)]
 #[command(name = "testbench-tui")]
 #[command(about = "TUI for running and visualizing epcheck testbench results")]
 struct Args {
     /// Path to the testbench directory
-    #[arg(short, long, default_value = "../../testbench/v1.0")]
+    #[arg(short, long, default_value = "testbench/v1.0")]
     testbench_path: String,
 
     /// Path to epcheck binary
-    #[arg(short, long, default_value = "../../epcheck")]
+    #[arg(short, long, default_value = "epcheck-src/target/release/epcheck")]
     epcheck_path: String,
 
     /// Run tests and exit without starting TUI
     #[arg(long)]
     run_only: bool,
+
+    /// Run performance check and compare against baseline
+    #[arg(long)]
+    performance_check: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    if args.run_only {
+    if args.run_only || args.performance_check {
         // Run tests without TUI
         let testbench_path = PathBuf::from(&args.testbench_path);
         let epcheck_path = PathBuf::from(&args.epcheck_path);
@@ -54,7 +151,7 @@ async fn main() -> Result<()> {
         let results_dir = testbench_path.join("results");
         tokio::fs::create_dir_all(&results_dir).await?;
         let db_path = results_dir.join("testbench.db");
-        let _db = Database::new(&db_path).await?;
+        let db = Database::new(&db_path).await?;
 
         // Create a temporary app just to use its test running logic
         let mut app = App::new(args.testbench_path.clone(), args.epcheck_path.clone()).await?;
@@ -67,7 +164,22 @@ async fn main() -> Result<()> {
                     println!("Latest run: {} tests, {} passed, {} failed, {} skipped",
                         latest.total_tests, latest.passed_tests, latest.failed_tests, latest.skipped_tests);
                 }
-                std::process::exit(0);
+
+                if args.performance_check {
+                    // Perform performance check
+                    match perform_performance_check(&db, &results_dir).await {
+                        Ok(_) => {
+                            println!("✅ Performance check passed!");
+                            std::process::exit(0);
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Performance check failed: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    std::process::exit(0);
+                }
             }
             Err(e) => {
                 eprintln!("❌ Failed to run tests: {}", e);
