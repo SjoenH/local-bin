@@ -134,7 +134,7 @@ main() {
     done
 
     # Special handling for Rust binary symlinks
-    RUST_TOOLS=("epcheck:epcheck-src" "usersecrets:usersecrets-src" "lspkg:lspkg-src" "testbench-tui:epcheck-src/testbench-tui")
+    RUST_TOOLS=("epcheck:epcheck-src" "usersecrets:usersecrets-src" "lspkg:lspkg-src" "testbench-tui:epcheck-src")
     for tool_info in "${RUST_TOOLS[@]}"; do
         tool_name="${tool_info%%:*}"
         project_dir="${tool_info##*:}"
