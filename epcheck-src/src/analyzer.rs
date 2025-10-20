@@ -1,7 +1,6 @@
-use crate::cli::Cli;
+use crate::cli::CheckArgs;
 use crate::openapi::{extract_endpoints, Endpoint};
 use crate::scanner::{ContentScanner, FileScanner};
-use std::collections::HashMap;
 use std::path::Path;
 
 /// Analysis result for an endpoint
@@ -30,11 +29,11 @@ pub struct AnalysisResult {
 /// Main endpoint analyzer
 pub struct EndpointAnalyzer {
     spec_endpoints: Vec<Endpoint>,
-    cli: Cli,
+    cli: CheckArgs,
 }
 
 impl EndpointAnalyzer {
-    pub fn new(spec: crate::openapi::OpenApiSpec, cli: Cli) -> Self {
+    pub fn new(spec: crate::openapi::OpenApiSpec, cli: CheckArgs) -> Self {
         let spec_endpoints = extract_endpoints(&spec);
         Self { spec_endpoints, cli }
     }
@@ -56,7 +55,7 @@ impl EndpointAnalyzer {
         // Build results
         let mut results = Vec::new();
         for endpoint in &self.spec_endpoints {
-            let (total_matches, files) = usage_results.get(endpoint)
+            let (_total_matches, files) = usage_results.get(endpoint)
                 .map(|(count, files)| (*count, files.clone()))
                 .unwrap_or((0, Vec::new()));
 

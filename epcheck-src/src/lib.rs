@@ -4,15 +4,15 @@ pub mod scanner;
 pub mod analyzer;
 pub mod output;
 
-pub use crate::cli::Cli;
+pub use crate::cli::{CheckArgs, Cli};
 use crate::analyzer::EndpointAnalyzer;
 use crate::output::OutputFormatter;
 use anyhow::Result;
 
 /// Main entry point for the epcheck application
-pub async fn run(cli: Cli) -> Result<()> {
+pub async fn run(args: CheckArgs) -> Result<()> {
     // Determine spec path
-    let spec_path = match &cli.spec {
+    let spec_path = match &args.spec {
         Some(s) => s.clone(),
         None => cli::find_openapi_spec().ok_or_else(|| anyhow::anyhow!("No OpenAPI spec provided and none found in current or parent directories"))?,
     };
@@ -21,14 +21,14 @@ pub async fn run(cli: Cli) -> Result<()> {
     let spec = cli::load_openapi_spec(&spec_path).await?;
 
     // Create analyzer
-    let analyzer = EndpointAnalyzer::new(spec, cli.clone());
+    let analyzer = EndpointAnalyzer::new(spec, args.clone());
 
     // Scan directory for endpoint usage
-    let results = analyzer.analyze_directory(&cli.dir).await?;
+    let results = analyzer.analyze_directory(&args.dir).await?;
 
     // Format and output results
-    let formatter = OutputFormatter::new(cli.format);
-    formatter.output(results, &cli)?;
+    let formatter = OutputFormatter::new(args.format);
+    formatter.output(results, &args)?;
 
     Ok(())
 }

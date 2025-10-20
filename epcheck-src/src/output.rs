@@ -1,6 +1,5 @@
 use crate::analyzer::{AnalysisResult, EndpointStatus};
-use crate::cli::{Cli, OutputFormat};
-use std::io::{self, Write};
+use crate::cli::{CheckArgs, OutputFormat};
 
 /// Output formatter for analysis results
 pub struct OutputFormatter {
@@ -13,7 +12,7 @@ impl OutputFormatter {
     }
 
     /// Output the analysis results
-    pub fn output(&self, results: AnalysisResult, cli: &Cli) -> anyhow::Result<()> {
+    pub fn output(&self, results: AnalysisResult, cli: &CheckArgs) -> anyhow::Result<()> {
         match self.format {
             OutputFormat::Table => self.output_table(results, cli),
             OutputFormat::Csv => self.output_csv(results),
@@ -22,7 +21,7 @@ impl OutputFormatter {
         }
     }
 
-    fn output_table(&self, results: AnalysisResult, cli: &Cli) -> anyhow::Result<()> {
+    fn output_table(&self, results: AnalysisResult, cli: &CheckArgs) -> anyhow::Result<()> {
         println!("\n{}", "=".repeat(80));
         println!("OpenAPI Endpoint Usage Report");
         println!("Generated on {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
@@ -193,7 +192,7 @@ impl OutputFormatter {
         Ok(())
     }
 
-    fn output_json(&self, results: AnalysisResult, cli: &Cli) -> anyhow::Result<()> {
+    fn output_json(&self, results: AnalysisResult, cli: &CheckArgs) -> anyhow::Result<()> {
         use serde_json::json;
 
         let endpoints: Vec<serde_json::Value> = results.endpoints
@@ -229,7 +228,7 @@ impl OutputFormatter {
         Ok(())
     }
 
-    fn output_markdown(&self, results: AnalysisResult, cli: &Cli) -> anyhow::Result<()> {
+    fn output_markdown(&self, results: AnalysisResult, cli: &CheckArgs) -> anyhow::Result<()> {
         // Print table header
         println!("| Endpoint | Methods | Status | Count | Files |");
         println!("|----------|---------|--------|-------|-------|");

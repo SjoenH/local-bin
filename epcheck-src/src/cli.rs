@@ -1,10 +1,17 @@
-use clap::{ArgEnum, Parser};
+use clap::{ArgEnum, Parser, Subcommand};
 use std::path::PathBuf;
 
 /// Fast OpenAPI endpoint usage checker
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
+    #[clap(subcommand)]
+    pub command: Option<Commands>,
+}
+
+/// Arguments for the check command
+#[derive(Parser, Debug, Clone)]
+pub struct CheckArgs {
     /// Path or URL to OpenAPI specification file (JSON or YAML). If not provided, searches for common spec files in current and parent directories.
     #[clap(short, long, value_name = "SPEC")]
     pub spec: Option<String>,
@@ -49,14 +56,36 @@ pub struct Cli {
     #[clap(short, long, value_name = "FILE")]
     pub exclude: Vec<String>,
 }
-
-/// Supported output formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ArgEnum)]
 pub enum OutputFormat {
     Table,
     Csv,
     Json,
     Markdown,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Check OpenAPI endpoint usage
+    Check(CheckArgs),
+    /// Generate shell completion scripts
+    Completions {
+        /// Shell to generate completions for
+        #[clap(arg_enum)]
+        shell: Shell,
+        /// Install completions to the appropriate location for the shell
+        #[clap(long)]
+        install: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ArgEnum)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+    Elvish,
 }
 
 /// Load and parse OpenAPI specification from file or URL

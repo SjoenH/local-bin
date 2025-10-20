@@ -1,17 +1,17 @@
-use crate::cli::Cli;
+use crate::cli::CheckArgs;
 use ignore::WalkBuilder;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::task;
 
 /// File scanner for finding source files
 pub struct FileScanner {
-    cli: Cli,
+    cli: CheckArgs,
 }
 
 impl FileScanner {
-    pub fn new(cli: Cli) -> Self {
+    pub fn new(cli: CheckArgs) -> Self {
         Self { cli }
     }
 
