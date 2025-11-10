@@ -148,6 +148,17 @@ main() {
         fi
     done
 
+    # Special handling for script symlinks
+    if [ -f "scripts/slack-pr-message.sh" ]; then
+        if [ -L "prm" ]; then
+            print_success "prm symlink is properly configured"
+        else
+            print_info "Creating prm symlink..."
+            ln -s "scripts/slack-pr-message.sh" "prm"
+            print_success "prm symlink created"
+        fi
+    fi
+
     # Check PATH
     print_header "PATH Configuration"
 
@@ -227,6 +238,10 @@ main() {
         fi
     fi
 
+    if [ -x "./prm" ] || [ -L "./prm" ]; then
+        print_success "prm (PR Slack message) is available"
+    fi
+
     # Summary
     print_header "Setup Complete!"
 
@@ -244,6 +259,7 @@ main() {
     echo "  - gcm - Generate commit messages"
     echo "  - labelai - Generate GitHub issue labels"
     echo "  - webi - Web installer script"
+    echo "  - prm - Generate Slack message for current PR"
 
     if [ "$HAS_RUST" = true ]; then
         echo -e "\n${GREEN}All tools are ready to use!${NC}"
