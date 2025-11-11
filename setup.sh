@@ -159,6 +159,16 @@ main() {
         fi
     fi
 
+    if [ -f "scripts/start.sh" ]; then
+        if [ -L "start" ]; then
+            print_success "start symlink is properly configured"
+        else
+            print_info "Creating start symlink..."
+            ln -s "scripts/start.sh" "start"
+            print_success "start symlink created"
+        fi
+    fi
+
     # Check PATH
     print_header "PATH Configuration"
 
@@ -242,6 +252,10 @@ main() {
         print_success "prm (PR Slack message) is available"
     fi
 
+    if [ -x "./start" ] || [ -L "./start" ]; then
+        print_success "start (development tmux session) is available"
+    fi
+
     # Summary
     print_header "Setup Complete!"
 
@@ -260,6 +274,7 @@ main() {
     echo "  - labelai - Generate GitHub issue labels"
     echo "  - webi - Web installer script"
     echo "  - prm - Generate Slack message for current PR"
+    echo "  - start - Start development environment with tmux"
 
     if [ "$HAS_RUST" = true ]; then
         echo -e "\n${GREEN}All tools are ready to use!${NC}"
