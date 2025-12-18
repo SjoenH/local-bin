@@ -176,6 +176,16 @@ main() {
         fi
     fi
 
+    if [ -f "scripts/nuget-setup.sh" ]; then
+        if [ -L "nuget-setup" ]; then
+            print_success "nuget-setup symlink is properly configured"
+        else
+            print_info "Creating nuget-setup symlink..."
+            ln -s "scripts/nuget-setup.sh" "nuget-setup"
+            print_success "nuget-setup symlink created"
+        fi
+    fi
+
     # Check PATH
     print_header "PATH Configuration"
 
@@ -267,6 +277,10 @@ main() {
         print_success "sbd (Docker build & deploy) is available"
     fi
 
+    if [ -x "./nuget-setup" ] || [ -L "./nuget-setup" ]; then
+        print_success "nuget-setup (GitHub NuGet setup) is available"
+    fi
+
     # Summary
     print_header "Setup Complete!"
 
@@ -287,6 +301,7 @@ main() {
     echo "  - prm - Generate Slack message for current PR"
     echo "  - start - Start development environment with tmux"
     echo "  - sbd - Docker build and deploy to Kubernetes"
+    echo "  - nuget-setup - Configure GitHub NuGet credentials"
 
     if [ "$HAS_RUST" = true ]; then
         echo -e "\n${GREEN}All tools are ready to use!${NC}"
