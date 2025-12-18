@@ -103,14 +103,11 @@ main() {
         for project in "${RUST_PROJECTS[@]}"; do
             if [ -d "$project" ]; then
                 print_info "Building $project (this may take a moment)..."
-                cd "$project"
-
-                if cargo build --release; then
+                # Run builds in a subshell so we don't change the current working directory
+                if (cd "$project" && cargo build --release); then
                     print_success "$project built successfully"
-                    cd ..
                 else
                     print_error "Failed to build $project"
-                    cd ..
                     exit 1
                 fi
             else
@@ -169,12 +166,12 @@ main() {
         fi
     fi
 
-    if [ -f "sbd.sh" ]; then
+    if [ -f "scripts/sbd.sh" ]; then
         if [ -L "sbd" ]; then
             print_success "sbd symlink is properly configured"
         else
             print_info "Creating sbd symlink..."
-            ln -s "sbd.sh" "sbd"
+            ln -s "scripts/sbd.sh" "sbd"
             print_success "sbd symlink created"
         fi
     fi
