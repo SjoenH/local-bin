@@ -169,6 +169,16 @@ main() {
         fi
     fi
 
+    if [ -f "sbd.sh" ]; then
+        if [ -L "sbd" ]; then
+            print_success "sbd symlink is properly configured"
+        else
+            print_info "Creating sbd symlink..."
+            ln -s "sbd.sh" "sbd"
+            print_success "sbd symlink created"
+        fi
+    fi
+
     # Check PATH
     print_header "PATH Configuration"
 
@@ -256,6 +266,10 @@ main() {
         print_success "start (development tmux session) is available"
     fi
 
+    if [ -x "./sbd" ] || [ -L "./sbd" ]; then
+        print_success "sbd (Docker build & deploy) is available"
+    fi
+
     # Summary
     print_header "Setup Complete!"
 
@@ -275,6 +289,7 @@ main() {
     echo "  - webi - Web installer script"
     echo "  - prm - Generate Slack message for current PR"
     echo "  - start - Start development environment with tmux"
+    echo "  - sbd - Docker build and deploy to Kubernetes"
 
     if [ "$HAS_RUST" = true ]; then
         echo -e "\n${GREEN}All tools are ready to use!${NC}"
