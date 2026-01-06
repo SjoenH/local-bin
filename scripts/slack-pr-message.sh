@@ -32,17 +32,17 @@ STATE=$(echo "$PR_JSON" | jq -r '.state')
 if [ "$IS_DRAFT" = "true" ]; then
     EMOJI=":memo:"
 elif [ "$STATE" = "OPEN" ]; then
-    EMOJI=":eyes:"
+    EMOJI=":new-pull-request:"
 elif [ "$STATE" = "CLOSED" ]; then
     EMOJI=":x:"
 elif [ "$STATE" = "MERGED" ]; then
-    EMOJI=":white_check_mark:"
+    EMOJI=":merge:"
 else
     EMOJI="$STATE"
 fi
 
 # Generate text-formatted message (title with link and emoji)
-SLACK_MESSAGE="$EMOJI PR: $TITLE
+SLACK_MESSAGE="$EMOJI $TITLE
 $URL"
 
 # Output the message and copy to clipboard
