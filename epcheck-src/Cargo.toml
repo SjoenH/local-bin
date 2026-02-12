@@ -10,7 +10,7 @@ authors = ["Henry Sjøen <henry@koka.no>"]
 # OpenAPI parsing
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.7"
+serde_yaml = "0.8"
 
 # CLI
 clap = { version = "3.2", features = ["derive"] }
